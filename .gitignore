@@ -4,3 +4,4 @@ node_modules/
 *.swo
 .ido4/
 .ido4shape/
+node_modules/

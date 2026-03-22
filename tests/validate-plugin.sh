@@ -204,6 +204,18 @@ AGGRESSIVE=$(grep -rl "CRITICAL!\|YOU MUST\|NEVER EVER\|IMPORTANT:" skills/ --in
 [ "$AGGRESSIVE" = "0" ] \
   && pass "No aggressive anti-patterns in skills" || warn "$AGGRESSIVE files with aggressive patterns"
 
+# ─── J. Claude Code Native Validation ───
+
+echo ""
+echo "▸ Claude Code Native Validation"
+
+if command -v claude &>/dev/null; then
+  claude plugin validate "$PLUGIN_ROOT" 2>&1 | grep -q "Validation passed" \
+    && pass "claude plugin validate passed" || fail "claude plugin validate failed"
+else
+  warn "claude CLI not found — skipping native validation (CI runs it separately)"
+fi
+
 # ─── Summary ───
 
 echo ""

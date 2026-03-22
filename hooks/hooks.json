@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/package.json\" >/dev/null 2>&1 || (cd \"${CLAUDE_PLUGIN_DATA}\" && cp \"${CLAUDE_PLUGIN_ROOT}/package.json\" . && npm install --production 2>&1) || rm -f \"${CLAUDE_PLUGIN_DATA}/package.json\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__plugin_ido4dev_ido4__(start_task|review_task|approve_task|block_task|unblock_task|return_task|refine_task|ready_task)",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A governance state transition just completed on a task. Based on the tool result, assess:\n\n1. Did this transition likely unblock downstream tasks? (e.g., completing a task that others depend on)\n2. Did this create a new blocker? (e.g., blocking a task that has dependents)\n3. Is this a significant milestone? (e.g., the transition completed a capability or crossed a completion threshold)\n\nRespond with JSON: {\"decision\": \"block\", \"reason\": \"[insight]\"} ONLY if there's a noteworthy governance impact to surface. Otherwise respond {\"decision\": \"allow\"}.\n\nExamples of noteworthy impacts:\n- \"Unblocked: completing this task likely unblocks downstream work. Consider running /ido4dev:standup to identify next priorities.\"\n- \"Warning: blocking this task may cascade to dependent tasks. Consider running /ido4dev:health to assess impact.\"\n- \"Milestone: this appears to complete a capability. Consider running /ido4dev:compliance to verify governance.\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "A task was just assigned to a container. Based on the tool result, check:\n\n1. Does the result indicate any integrity concerns? (tasks from same capability in different containers)\n2. Does the result indicate any dependency issues? (task depends on work in a later container)\n\nRespond with JSON: {\"decision\": \"block\", \"reason\": \"[concern]\"} ONLY if there's a governance risk. Otherwise {\"decision\": \"allow\"}.\n\nOnly flag real concerns visible in the tool result, not hypothetical ones."
+          }
+        ]
+      }
+    ]
+  }
+}

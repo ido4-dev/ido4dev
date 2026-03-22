@@ -1,0 +1,22 @@
+{
+  "name": "ido4dev",
+  "description": "The platform that makes AI-hybrid software development work at scale — specs-driven, methodology-aware, with full project context for every AI coding session.",
+  "version": "0.5.0",
+  "author": {
+    "name": "Bogdan Coman",
+    "url": "https://github.com/b-coman"
+  },
+  "repository": "https://github.com/ido4-dev/ido4dev",
+  "homepage": "https://ido4.dev",
+  "license": "MIT",
+  "keywords": [
+    "ai-hybrid-development",
+    "specs-driven",
+    "methodology",
+    "multi-agent",
+    "context-intelligence",
+    "institutional-memory",
+    "quality-enforcement",
+    "mcp"
+  ]
+}

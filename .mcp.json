@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ido4": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_DATA}/node_modules/@ido4/mcp/dist/index.js"],
+      "env": {}
+    }
+  }
+}

@@ -56,6 +56,51 @@ bash scripts/release.sh [patch|minor|major] "Release message"
 ```
 This bumps the version in `.claude-plugin/plugin.json` and syncs to the `ido4-dev/ido4-plugins` marketplace.
 
+## E2E Testing Protocol
+
+When monitoring a live ido4dev session (any skill — decompose, plan-wave, standup, etc.), follow this protocol.
+
+### Setup
+
+Two sessions run in parallel:
+- **Test session:** A project folder with the ido4dev plugin loaded. The user interacts naturally.
+- **Monitor session:** Opened in this repo. The user pastes interactions from the test session. Claude evaluates behavior against the skill and agent definitions in this codebase.
+
+### How to monitor
+
+1. Read the skill being tested (`skills/{name}/SKILL.md`) and any agents it invokes (`agents/{name}.md` or `agents/{name}/AGENT.md`). These define expected behavior — stages, sequencing, output format, governance rules.
+2. As interactions are pasted, compare actual behavior against the definitions. Look for: skipped stages, wrong sequencing, missing output fields, governance violations, silent failures, quality degradation, hallucinated content.
+3. Log every deviation as an observation immediately — don't batch them.
+
+### Observation format
+
+Each observation gets:
+- **ID:** Sequential (OBS-01, OBS-02, ...) within the test
+- **Type:** Bug, design gap, behavioral drift, quality issue, governance violation
+- **Severity:** Low / Medium / High / Critical
+- **When:** What stage and interaction triggered it
+- **What happened:** The actual behavior (quote the interaction)
+- **What was expected:** Traced to the specific skill/agent definition (file and section)
+- **Evidence:** The pasted interaction or output that shows the deviation
+- **Fix candidate:** Where in this repo the fix would go (file, section)
+
+### Report
+
+After the test session completes, produce a structured report in `reports/`:
+- File name: `e2e-{NNN}-{project-name}.md`
+- Sections: Test Setup, Pipeline Summary (what stages ran), Observations (all OBS entries), Positives (what worked well), Assessment, Next Steps
+- First report for each skill becomes the calibration baseline for future tests
+
+### What to watch for by stage type
+
+Don't duplicate skill definitions here — read the skill. But these cross-cutting concerns apply to any test:
+- **Does the skill read what it claims to read?** (canvas, spec, codebase, MCP resources)
+- **Does the output match the defined format?** (sections, metadata, structure)
+- **Are governance principles respected?** (epic integrity, dependency coherence, etc.)
+- **Does the agent handle edge cases?** (empty input, missing files, greenfield projects)
+- **Are intermediate review points honored?** (does the user get to review before the next stage proceeds)
+- **Is content preserved through the pipeline?** (dependencies, stakeholder context, cross-cutting concerns — nothing silently dropped)
+
 ## Related
 
 - [@ido4/mcp](https://github.com/ido4-dev/ido4) — MCP server + core domain (the monorepo)

@@ -4,7 +4,7 @@ description: >
   Reads a technical canvas and produces a technical spec artifact in the format
   consumed by ido4's ingestion pipeline. Decomposes capabilities into right-sized
   tasks with code-grounded effort, risk, type, AI suitability, and dependencies.
-  Use this agent as Stage 2 of the decomposition pipeline.
+  Use this agent during Phase 2 of the decomposition pipeline (`/ido4dev:decompose-tasks`).
 tools: Read, Write, Glob, Grep
 model: opus
 ---

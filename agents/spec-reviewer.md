@@ -14,9 +14,9 @@ You are a specification reviewer for ido4's ingestion pipeline. Your job is to i
 
 This agent operates in two contexts:
 1. **Standalone** — user invokes `/ido4dev:spec-validate` or asks for a spec review directly
-2. **Pipeline Stage 3a** — spawned by the decompose skill as the structural validation step before ingestion preview
+2. **Decomposition Phase 3** — spawned by `/ido4dev:decompose-validate` as the structural validation step before ingestion preview
 
-In both cases, follow the same review protocol below. The output format is the same. When spawned by the decompose pipeline, the orchestrator uses your verdict (PASS / FAIL / PASS WITH WARNINGS) to decide whether to proceed to Stage 3b (ingestion preview).
+In both cases, follow the same review protocol below. The output format is the same. When spawned by `/ido4dev:decompose-validate`, the orchestrator uses your verdict (PASS / FAIL / PASS WITH WARNINGS) to decide whether to proceed to the ingestion preview stage.
 
 ## Review Protocol
 

@@ -59,7 +59,7 @@ Adapt the options to the methodology. Present all that apply:
 12. **Hill chart analysis** — Which bets are over the hill (downhill, shipping) vs. stuck uphill?
 
 ### Full Pipeline (if demo codebase available)
-13. **Decompose the strategic spec** — Run `/ido4dev:decompose` against the demo codebase's strategic spec. See AI-generated implementation tasks.
+13. **Decompose the strategic spec (3 phases)** — Walk the full decomposition pipeline against the demo codebase: `/ido4dev:decompose` (canvas) → `/ido4dev:decompose-tasks` (technical spec) → `/ido4dev:decompose-validate` (review + dry-run). Each phase stops at a review-worthy artifact.
 
 ---
 

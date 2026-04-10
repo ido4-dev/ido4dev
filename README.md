@@ -46,7 +46,7 @@ The onboarding skill auto-clones a [demo codebase](https://github.com/ido4-dev/i
 | **Project Intelligence** | `/ido4dev:standup`, `/ido4dev:board`, `/ido4dev:health`, `/ido4dev:compliance` |
 | **Planning** | `/ido4dev:plan-wave`, `/ido4dev:plan-sprint`, `/ido4dev:plan-cycle` |
 | **Retrospectives** | `/ido4dev:retro-wave`, `/ido4dev:retro-sprint`, `/ido4dev:retro-cycle` |
-| **Specification** | `/ido4dev:decompose`, `/ido4dev:spec-validate`, `/ido4dev:spec-quality` |
+| **Specification** | `/ido4dev:decompose`, `/ido4dev:decompose-tasks`, `/ido4dev:decompose-validate`, `/ido4dev:spec-validate`, `/ido4dev:spec-quality` |
 | **Sandbox** | `/ido4dev:sandbox`, `/ido4dev:pilot-test` |
 
 ## Part of the ido4 Suite

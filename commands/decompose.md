@@ -1,5 +1,5 @@
 ---
-description: Decompose a strategic spec into a technical spec — runs the full pipeline from ido4shape output to ingestion-ready artifact
+description: Phase 1 of the decomposition pipeline — parse a strategic spec and produce a technical canvas via code analysis
 allowed-tools: mcp__plugin_ido4dev_ido4__*, Read, Write, Glob, Grep
 ---
 

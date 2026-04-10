@@ -3,7 +3,7 @@ name: code-analyzer
 description: >
   Analyzes a codebase in the context of a strategic spec to produce a technical canvas.
   Maps each strategic capability to relevant code modules, patterns, and architecture.
-  Use this agent as Stage 1 of the decomposition pipeline.
+  Use this agent during Phase 1 of the decomposition pipeline (`/ido4dev:decompose`).
 tools: Read, Write, Glob, Grep, mcp
 model: opus
 ---

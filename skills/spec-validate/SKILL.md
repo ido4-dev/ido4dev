@@ -26,7 +26,7 @@ Verify each structural element against the parser's exact expectations:
 
 **Capabilities:** `## Capability: Name` format — must include `Capability:` prefix. Metadata in `>` blockquote with `size` and `risk` from allowed sets.
 
-**Tasks:** `### PREFIX-NN: Title` where PREFIX is `[A-Z]{2,5}` and NN is `\d{2,3}`. Prefix must match parent capability's derived prefix.
+**Tasks:** `### REF: Title` where REF matches `[A-Z]{2,5}-\d{2,3}[A-Z]?` — 2–5 uppercase letters, hyphen, 2–3 digits, and an optional trailing uppercase letter suffix (e.g., `NCO-01` or `NCO-01A`). The optional suffix traces sub-tasks back to their strategic capability. Prefix must match parent capability's derived prefix.
 
 **Metadata keys (exact, lowercase):** effort, risk, type, ai, depends_on. Values from allowed sets:
 - effort: S, M, L, XL

@@ -28,7 +28,7 @@ Check every structural element against the parser's exact expectations:
 
 - Project header: exactly one `#` heading, `>` description
 - Capability headings: `## Capability: Name` format (not `## Name`), `>` metadata with size and risk
-- Task headings: `### PREFIX-NN: Title` where PREFIX is `[A-Z]{2,5}` and NN is `\d{2,3}`
+- Task headings: `### REF: Title` where REF matches `[A-Z]{2,5}-\d{2,3}[A-Z]?` — 2–5 uppercase letters, hyphen, 2–3 digits, and an optional trailing uppercase letter suffix. The optional suffix is used by the technical-spec-writer to trace sub-tasks back to their strategic capability (e.g., `NCO-01A` and `NCO-01B` both derive from strategic `NCO-01`). Both suffixed and unsuffixed refs are valid — do NOT flag suffixed refs as errors
 - Task prefix matches parent capability prefix (e.g., NCO- tasks under "Notification Core")
 - Metadata keys: effort, risk, type, ai, depends_on (exact names, lowercase)
 - Metadata values from allowed sets: effort (S/M/L/XL), risk (low/medium/high/critical), type (feature/bug/research/infrastructure), ai (full/assisted/pair/human)

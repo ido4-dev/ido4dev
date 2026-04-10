@@ -12,7 +12,7 @@ ido4dev gives AI coding agents the understanding to build correctly:
 - **Multi-agent coordination** — work distribution, task locking, handoff protocols
 - **Methodology support** — Hydro (wave-based), Scrum (sprint-based), Shape Up (cycle-based). The engine is code; methodologies are profiles.
 
-21 skills, 4 agents, 2 governance hooks. Built on the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server.
+23 skills, 4 agents, 2 governance hooks. Built on the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server.
 
 ## Installation
 

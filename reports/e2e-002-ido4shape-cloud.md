@@ -206,3 +206,39 @@ For OBS-01 and OBS-02 (Stage 0 violations), the fix is more local — make Stage
 - **Per-capability sections should exist 1:1 with strategic capabilities.** Run `grep -c '^## Capability:'` on the canvas — should match the strategic capability count (here: 25).
 - **Task count vs. capability count.** Round 1: 36 tasks / 26 capabilities = 1.38 tasks/cap. Round 2: same. The writer is consistent — tasks/cap ratio is a decent sanity check for decomposition granularity.
 - **Review checkpoints are binary.** Either the orchestrator asks and waits, or it doesn't. No partial credit. Watch for transitions like "Stage X complete. Let me [verb] it and run Stage Y" — that's the failure signature every time.
+
+---
+
+## Resolution — 2026-04-10
+
+All ten observations closed. Shipped across two repos.
+
+**ido4dev v0.7.0** (commit `475290e`):
+- `/ido4dev:decompose` split into three user-invocable phase skills (`decompose`, `decompose-tasks`, `decompose-validate`) following the existing `sandbox` / `sandbox-explore` pattern.
+- Structural enforcement replaces prose "WAIT for user" checkpoints — each phase ends at a natural artifact boundary, making auto-proceed impossible by construction.
+- Bumps `@ido4/mcp` dependency to `^0.7.1`.
+- Closes OBS-01 through OBS-09.
+
+**@ido4/mcp 0.7.1** (ido4-MCP commit `b6a1d80`, published to npm):
+- Task-ref parser regexes (three call sites — `spec-parser.js:13`, `strategic-spec-parser.js:32`, `sandbox-service.js:451`) now accept an optional `[A-Z]?` suffix after the digit portion.
+- Fully backward-compatible — existing specs without suffixes unchanged.
+- 3 new regression tests added (1,762/1,762 total passing).
+- Closes OBS-10.
+
+**Verified:**
+- Plugin validation suite: 120/120 passing.
+- ido4-MCP test suite: 1,762/1,762 passing.
+- Published npm tarballs downloaded and inspected — all three packages (`@ido4/spec-format`, `@ido4/core`, `@ido4/mcp`) contain the fix.
+
+**Key retrospective insight — prose vs structural enforcement:**
+
+This test cycle revealed that prose-based orchestrator guardrails ("MUST wait for user response", "Do NOT auto-search") do not reliably hold at runtime. Claude's completion bias overrides mid-skill interruption directives. The reliable pattern is structural: split multi-phase skills into separate user-invocable skills where each phase has a natural end point. Forward-pointing guidance ("run `/ido4dev:decompose-tasks` next") then aligns with completion bias instead of fighting it.
+
+This pattern was already used elsewhere in the plugin (`plan-wave`/`plan-sprint`/`plan-cycle`, `retro-wave`/`retro-sprint`/`retro-cycle`, `sandbox`/`sandbox-explore`). The round-1 fixes tried to bolt checkpoints onto the existing monolithic skill; round 2 showed that didn't work; the round-2 fix adopted the existing pattern properly.
+
+**Round 3 status:** Pending. The round-2 frozen test terminal is poisoned (pre-fix pipeline state) and should be abandoned. Round 3 starts fresh on `ido4shape-enterprise-cloud-spec.md` against plugin v0.7.0 + `@ido4/mcp` 0.7.1. Prerequisite: a **new** Claude session in the test project — the `SessionStart` hook reinstalls `@ido4/mcp` at session start, so the fix becomes active the first time a fresh session loads the plugin. Expected behavior:
+
+1. `/ido4dev:decompose <spec-path>` → Phase 1 runs, ends with canvas and forward-pointing guidance
+2. User reviews canvas, then runs `/ido4dev:decompose-tasks <canvas-path>` → Phase 2 runs, ends with technical spec
+3. User reviews technical spec, then runs `/ido4dev:decompose-validate <spec-path>` → Phase 3 runs spec-reviewer (should PASS now, not PASS WITH WARNINGS on E1), then offers dry-run preview showing ~36 issues
+4. All three phases complete cleanly with review checkpoints between each

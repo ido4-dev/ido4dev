@@ -8,7 +8,7 @@ The Claude Code plugin for ido4 — the AI-hybrid development platform. This rep
 
 ```
 ido4dev (this plugin)
-  ├── Skills (21)     — Governance workflows (standup, planning, sandbox, etc.)
+  ├── Skills (23)     — Governance workflows (standup, planning, sandbox, etc.)
   ├── Agents (4)      — PM, code-analyzer, technical-spec-writer, spec-reviewer
   ├── Hooks (2 types) — SessionStart (MCP server install), PostToolUse (governance signals)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}

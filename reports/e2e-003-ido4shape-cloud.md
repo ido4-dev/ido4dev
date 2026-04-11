@@ -160,36 +160,284 @@ During round-3 diagnosis, after multiple failed attempts to complete Phase 1's c
 - **Interpretation:** Possibly Claude adapting after observing the previous 40-min hang. This would be emergent cautious behavior rather than skill drift
 - **Fix candidate:** Consider adding an explicit pre-spawn user-optional checkpoint to Stage 1 as a deliberate design choice — e.g., "Before spawning the code-analyzer (which takes 10-20 min), offer the user the chance to review or adjust the agent prompt." This would turn Claude's emergent cautious behavior into a stable, documented skill feature
 
-### OBS-06 — Design Gap — Medium (surfaced during Phase 1 completion, 2026-04-11)
+### OBS-06 — Design Gap — Medium (broadened scope 2026-04-11 after Phase 2 completion)
 
-- **When:** Post-Phase-1 completion. User is reviewing the canvas that Claude produced and realized the pipeline offers no structured way to add their own technical knowledge to the canvas before Phase 2 consumes it
-- **The gap:** Phase 1 ends with *"Review the canvas, then run `/ido4dev:decompose-tasks`"*. This is a **passive review** — the technical user (who drives and consumes the decompose pipeline) can read the canvas and decide whether to proceed, but has no supported way to *add, correct, or extend* the canvas content. If the code-analyzer (or now, the inline Stage 1c synthesis) misses technical details the user knows — existing system constraints, avoided patterns, additional non-functional requirements, user-specific context about integration targets — that knowledge is either lost (user forgets or doesn't bother), or injected later at the wrong stage (Phase 2 discovery, which is meant to be mechanical decomposition), or forced in via manual canvas editing without guardrails (silent edits may break the spec-writer's consumption in Phase 2 — verbatim strategic context preservation, group coherence context, template structure)
-- **Why this matters:** The pipeline is AI-hybrid development governance. The human-in-the-loop value is specifically at these between-phase checkpoints. A passive "proceed or not" gate doesn't capture the user's technical knowledge — it only gates its propagation
-- **Severity:** Medium. Not a bug, not a blocker. The pipeline works without it. But it's a missing capability that undermines the "collaborative specification" value proposition of the plugin
-- **Recommended fix (deferred to round 4, not blocking round 3 completion):** Add a new optional skill `/ido4dev:decompose-refine` positioned between Phase 1 and Phase 2:
-  - Phase 1: `/ido4dev:decompose` produces canvas
-  - Phase 1.5 (optional): `/ido4dev:decompose-refine <canvas-path>` facilitates collaborative canvas refinement
-  - Phase 2: `/ido4dev:decompose-tasks` consumes the (possibly refined) canvas
-  - Phase 3: `/ido4dev:decompose-validate` validates + ingests
-- **How the refine skill should work (sketch):**
-  1. Read the canvas and `agents/code-analyzer.md` (template + context-preservation rules)
-  2. Open with a short canvas summary + prompt: *"What would you like to refine? You can describe additions/corrections in natural language, point at specific sections, or ask questions to help decide."*
-  3. Per user turn: either answer a question, propose an edit in diff form (apply after approval), or flag a contradiction across sections
-  4. Guardrails enforced by Claude reading the code-analyzer template:
-     - Do not silently remove or rephrase verbatim strategic context
-     - Do not add new `## Capability:` sections (those come from strategic spec only)
-     - Do not reorder capabilities (dependency order is load-bearing)
-     - Do allow: additions to Complexity Assessment, Discoveries & Adjustments, Code-Level Dependencies, Cross-Cutting Concern notes, technical constraints, per-capability context additions
-  5. Exit when user says done OR invokes `/ido4dev:decompose-tasks` directly. Forward-pointing guidance same pattern as other skills
-- **Why a new skill and not a Phase 1 extension:** Keeps phase-skill pattern consistent (one phase per skill), makes refinement explicitly optional, supports multiple refinement passes, matches existing conversational-skill patterns (`sandbox-explore`, `spec-quality`)
-- **Matches existing plugin patterns:** `sandbox-explore` (conversational discovery), `spec-quality` (conversational quality iteration) — the refine skill is the same conversational pattern applied to canvas editing
-- **Pre-requisites — none.** No changes to agents, MCP server, Phase 2, or Phase 3. Purely additive.
+- **When:** Surfaced during Phase 1 completion, then confirmed and broadened after Phase 2 completion. The same gap exists between BOTH Phase 1 and Phase 2 AND Phase 2 and Phase 3 — in both cases the technical user is handed an artifact and asked to "review then proceed" without any supported way to actually refine the artifact
+- **The gap:** Phase 1 ends with *"Review the canvas, then run `/ido4dev:decompose-tasks`"*. Phase 2 ends with *"Review the technical spec, then run `/ido4dev:decompose-validate`"*. Both are **passive reviews** — the technical user can read and decide whether to proceed, but has no supported way to *add, correct, or extend* the artifact. Knowledge the user has that the automated synthesis missed gets lost, injected at the wrong stage, or forced in via manual editing without guardrails (risking downstream breakage — canvas edits might break spec-writer's consumption, tech spec edits might break parser compliance or the dependency graph)
+- **Concrete gray areas in the just-produced technical spec (examples from Phase 2 summary):**
+  - 3 high-risk capabilities (STOR-05, PLUG-02, VIEW-05) parallelize per the dep graph but Phase 2 flagged a chaos-testing bandwidth concern recommending serialization — a scheduling decision the user should confirm
+  - 6+ research spikes guarding blocking decisions (auth vendor, email vendor, GCS scale, cold-start, orphan detection, diff perf, enqueue model, role filter, 10MB rendering, export latency) — the user may already know the answer to some and want to collapse the spike into direct implementation
+  - Effort/risk metadata across 94 tasks — the user may have strong priors that differ from what Claude inferred from the canvas
+  - Task bundling choices (Goldilocks is a heuristic) — user may want to split or merge
+  - Stakeholder attribution gaps — user may want to add omitted attributions before task descriptions become GitHub issue bodies
+  - Captured design decisions (418 lock-warning rejected, PROJ-03 auto-summary plugin-side) — user may want to override
+- **Why this matters:** The pipeline is AI-hybrid development governance. The human-in-the-loop value lives at between-phase checkpoints. A passive "proceed or not" gate doesn't capture the user's technical knowledge — it only gates its propagation. Mistakes in the technical spec are especially costly because the spec becomes GitHub issues at ingestion — post-ingestion corrections require editing issues directly, after the fact
+- **Severity:** Medium. Not a bug, not a blocker. Pipeline works without it. But it's a missing capability that undermines the "collaborative specification" value proposition
+- **Recommended fix (deferred to round 4): a single unified refinement skill that handles both artifacts.** Initially we scoped this as a canvas-only refinement skill. Phase 2 completion revealed the same gap with the technical spec, so the better architecture is one skill that detects artifact type and applies mode-appropriate guardrails:
+
+  ```
+  /ido4dev:decompose                — Phase 1: canvas
+  /ido4dev:decompose-refine    NEW  — Phase 1.5 OR 2.5: refine canvas or tech spec
+  /ido4dev:decompose-tasks          — Phase 2: technical spec from canvas
+  /ido4dev:decompose-validate       — Phase 3: validate + ingest
+  ```
+
+- **Unified skill design:**
+  1. Input: `$ARGUMENTS` is a path to either a canvas or a technical spec
+  2. Skill detects artifact type from structure:
+     - `# Technical Canvas:` header → **canvas mode** → reads `agents/code-analyzer.md` for template + rules
+     - `# ... — Technical Spec` header → **technical-spec mode** → reads `agents/technical-spec-writer.md` for template + rules
+  3. Conversational loop (same in both modes): read artifact + template → open with short summary + prompt → per user turn either answer question, propose edit in diff form, or flag cross-section contradiction → apply on approval → validate post-edit → exit on "done" or direct forward invocation
+
+- **Mode-specific guardrails:**
+
+  | Aspect | Canvas mode | Technical-spec mode |
+  |---|---|---|
+  | Preserve verbatim | Strategic context (descriptions, success conditions, stakeholder attributions, group context) | Capability descriptions (carry canvas + strategic context forward), parser format compliance (`spec-parser.ts` rules) |
+  | Forbidden edits | Add/remove `## Capability:` sections (these come from strategic spec), reorder capabilities | Add/remove `## Capability:` sections (these come from canvas), break parser format, break dependency graph |
+  | Allowed edits | Complexity Assessment, Discoveries & Adjustments, Code-Level Dependencies, Cross-Cutting Concern notes, per-capability technical context | Task-level: description, metadata values (effort/risk/type/ai), success conditions, dependencies. Add/remove/split/merge tasks within a capability. Adjust capability-level metadata (size/risk) |
+  | Post-edit validation | Template section presence | Parser compliance check (`[A-Z]{2,5}-\d{2,3}[A-Z]?` ref format, metadata keys, allowed values), dependency graph still validates (no cycles, all refs resolve) |
+
+- **Why one unified skill beats two separate ones:**
+  1. Same conversational loop — read, ask, propose, approve, apply, validate, exit. UX is identical; mode just changes what's editable
+  2. One skill to learn — user doesn't need to remember which refine skill for which artifact
+  3. DRY — the conversational pattern, approval flow, and diff-apply-validate cycle are shared
+  4. Easier to extend — future artifact types (audit reports, rollout plans) add a mode rather than a sibling skill
+  5. **Precedent in the plugin:** `sandbox` handles create/reset/destroy as modes of one skill. Unified refine is the same pattern
+
+- **Pre-requisites — none.** No changes to agents, MCP server, Phase 2, or Phase 3 skills (beyond updating their end-of-phase guidance to mention refinement as optional). Purely additive.
+
 - **Round-4 scope:**
-  - `skills/decompose-refine/SKILL.md` — new (~120 lines)
+  - `skills/decompose-refine/SKILL.md` — new (~160 lines to cover both modes)
   - `commands/decompose-refine.md` — new shim
-  - `skills/decompose/SKILL.md` — update end-of-Phase-1 guidance to mention refinement as an optional next step
+  - `skills/decompose/SKILL.md` — update end-of-Phase-1 guidance to mention refinement as an optional next step before Phase 2
+  - `skills/decompose-tasks/SKILL.md` — update end-of-Phase-2 guidance to mention refinement as an optional next step before Phase 3
   - `README.md` + `CLAUDE.md` — skill count bump 23 → 24
-  - Commit + release as plugin v0.7.1 or v0.8.0
+  - Commit + release as plugin v0.8.0
+
+### OBS-07 — Design Gap — Medium (surfaced during Phase 2 output review, 2026-04-11)
+
+- **When:** After Phase 2 produced the 1317-line technical spec, sampled 7 task descriptions across INFRA, PLAT, STOR, and PLUG capabilities to assess the specification-vs-implementation balance
+- **The gap:** The `technical-spec-writer` rules produce **consistently over-prescriptive** task descriptions. Implementer agents consuming these tasks would have essentially zero room to exercise judgment about file organization, function signatures, data structures, config values, or library choices. This undermines the core value of AI-hybrid development — the implementer agent should be able to think big-picture and apply judgment, not just transcribe instructions
+- **Why this matters:** Over-prescription makes implementation tasks mechanical. The implementer agent becomes a typist: "create file X with function Y with signature Z" leaves no room for design decisions that might surface problems the spec didn't anticipate. Under-specification is also bad (leads to drift), so the fix isn't "write less" — it's "write the right things"
+- **Severity:** Medium. The pipeline produces parseable output (not a bug, not a blocker), but the output's downstream value is reduced. Worth fixing before ingestion becomes the default path
+
+#### Evidence from the sampled tasks
+
+**Pattern 1: File paths and function signatures fully dictated.**
+
+> *"Create `apps/api/src/storage/gcs.ts` exposing `readFile(orgId, projectId, filename, generation?)` and `writeFile(orgId, projectId, filename, content)` that returns the new generation number."* — STOR-01A
+
+Exact file path, exact module name, exact parameter lists, exact return type. An implementer has no room to decide file organization or API shape.
+
+**Pattern 2: Directory structures enumerated.**
+
+> *"scaffold `apps/api/src/` with: `index.ts` entry point, `routes/` directory (one file per endpoint group), `services/`, `db/`, `storage/`, `auth/`, `notifications/`, `jobs/`"* — PLAT-01B
+
+Full directory tree prescribed. A reasonable implementer might choose flatter or deeper based on what the code wants, but they won't get the chance.
+
+**Pattern 3: Config values and algorithms pinned.**
+
+> *"exponential backoff `5s, 10s, 20s, 40s, ... max 5min`"* — PLUG-02B
+> *"SHA-256 of a canonical serialization"* — STOR-01B
+> *"`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`"* — PLAT-01A
+
+Specific retry intervals, hash function, TypeScript compiler flags — presented as requirements.
+
+**Pattern 4: "Decisions" are pre-made in parentheses.**
+
+> *"Decide between Hono and Fastify (Hono preferred for Cloud Run cold-start friendliness per canvas)"* — PLAT-01B
+> *"Pick a migration framework (Drizzle or node-pg-migrate — Drizzle preferred)"* — PLAT-01C
+
+Framed as an implementer decision, but the answer is in parentheses. The implementer won't push back.
+
+**Pattern 5: Good intent-based elements ARE present but sparse.**
+
+- *"the most likely place for a security bug"* — PLAT-01D (flags risk, doesn't dictate code)
+- *"Session open... Pull-to-prompt latency is under 5 seconds"* — PLUG-02C (latency constraint, not implementation)
+- Research task descriptions skew intent-based because the outcome is a decision doc
+
+**Success conditions are generally well-framed** (outcome-shaped, verifiable). The problem is concentrated in the task descriptions.
+
+#### Necessary vs. accidental prescription — the distinguishing heuristic
+
+Not all prescription is wrong. There's a legitimate distinction:
+
+| Necessary prescription (include) | Accidental prescription (leave out) |
+|---|---|
+| Architectural constraints affecting multiple capabilities (tenant-aware repo, transaction boundaries) | The writer's implementation preference (`pnpm` vs `npm`) |
+| Shared contracts other capabilities depend on (`Role` literal union, `Commit` schema) | Reasonable defaults dressed as requirements (retry intervals, TS flags) |
+| Canvas-decided approaches after research | Method signatures that could be designed differently without cross-capability impact |
+| Hard integration points (specific hooks, events, external APIs) | Directory names, file organization, class vs. function style |
+| Security/tenancy/correctness patterns that must not be bypassed | Library choices when a canvas-decided approach isn't in effect |
+
+**The heuristic:** *"Would an implementer changing this decision have cross-capability impact, violate a stated constraint, or conflict with a canvas-decided approach? If YES, include it as a constraint. If NO, leave it to the implementer."*
+
+#### Fix approach — principle + examples, not rule lists (reframed 2026-04-11)
+
+An earlier version of this section proposed three surgical rule additions plus a long include/exclude list. That was itself over-prescriptive toward the writer agent — exactly the failure mode this OBS is flagging in the writer's output toward implementer agents. See OBS-09 for the meta-concern about rule accumulation. The right fix is a **principle + concrete examples**, not a rule list. Agents are reasoners, not compliance officers.
+
+**One new principle for `agents/technical-spec-writer.md` Rules section:**
+
+> **Specify intent and constraints, not implementation.** If an implementer changing a decision would have cross-capability impact or violate a stated constraint, the decision belongs in the task description. If not, the implementer agent decides. Under-specification is recoverable; over-prescription is not. When in doubt, leave it out.
+
+**One new "Good vs Bad Task Descriptions" example block** (added to the template or rules section):
+
+```
+BAD (over-prescriptive):
+  Create `apps/api/src/storage/gcs.ts` exposing
+  `readFile(orgId, projectId, filename, generation?)` and
+  `writeFile(orgId, projectId, filename, content)` that returns
+  the generation number. Uses @google-cloud/storage.
+
+GOOD (intent-based):
+  Add the application-side GCS client wrapper that other STOR
+  capabilities build on. Must be tenant-aware (org_id as path
+  prefix), read/write only (no delete — IAM enforced), and
+  support streaming up to the VIEW-01 10MB file bound.
+  Anchor: existing tenant-aware repo pattern in apps/api/src/db/repo.ts.
+
+WHAT MOVED: file paths, function signatures, library choice, and
+return types are implementation decisions that an implementer can
+make without cross-capability impact. The constraints — tenant-
+awareness, read/write only, 10MB streaming — are what the rest of
+STOR depends on and must be preserved. The anchor tells the
+implementer where the pattern lives without dictating the new
+code's shape.
+```
+
+One principle, one example, done. The writer agent reads both and applies the pattern. No forbidden-term list, no include/exclude table, no rule enumeration.
+
+#### Canvas-side — same approach for `agents/code-analyzer.md`
+
+One new principle in the Rules section:
+
+> **Complexity Assessment describes what makes the work hard and what it depends on, not how to solve it.** Good: *"STOR-05's 1-hour TTL refresh path must handle concurrent writes — the existing `session-start.sh` hook gives the right granularity but refreshing on every turn is unusual for Bash."* Bad: *"Use Postgres row-level locks with `SELECT FOR UPDATE NOWAIT`..."*. The first frames the hard problem; the second tells Phase 2 what code to produce.
+
+The principle includes its own example inline. No separate example block needed at canvas level.
+
+#### Connection to the refinement skill
+
+This finding **strengthens the OBS-06 refinement skill's value proposition.** The intent-vs-prescription balance is hard to fully resolve in rules alone — what counts as "over-prescriptive" depends on the task, the team, and the implementer agents. Principles point in the right direction; the user's judgment is where calibration happens.
+
+Refinement becomes the place where the user says *"this task is too detailed, remove the method list"* or *"that one is too vague, add the constraint about session TTL"*. The refine skill becomes a **tuning loop** for prescription level, not just a typo fix.
+
+**How the refine skill handles this** (replacing the earlier "detection patterns" approach, which was its own over-prescription): in technical-spec mode, the refine skill reads `agents/technical-spec-writer.md` — which now contains the intent-over-prescription principle and the Good vs Bad example. Claude applies the same principle to the refinement loop. When the user asks Claude to refine a task, Claude can notice over-prescription and propose a rewrite using the same judgment the writer was supposed to apply. No separate detection-pattern list needed.
+
+#### Round 4 scope additions (over and above OBS-06's scope)
+
+- `agents/technical-spec-writer.md` — **1 new principle** + **1 new example block** (not 3 rule additions)
+- `agents/code-analyzer.md` — **1 new principle** (with inline example)
+- `skills/decompose-refine/SKILL.md` — relies on the same principle + example in the writer agent; no separate detection patterns
+- Round 4 calibration test: re-run decomposition on the same `ido4shape-enterprise-cloud-spec.md` after the principle changes, compare "after" technical spec against the "before" (this round 3's output) — expect shorter descriptions, more outcomes framed as constraints, fewer dictated file paths and signatures
+- Release bump: the agent-rule changes are behavioral, not structural — plugin v0.8.0 (minor bump) captures this alongside the refinement skill
+
+#### Sample evidence preserved for calibration baseline
+
+The current Phase 2 technical spec at `/Users/bogdanionutcoman/dev-projects/ido4shape-cloud/specs/ido4shape-enterprise-cloud-technical.md` (1317 lines, 94 tasks, 29 capabilities) is the calibration baseline for "before the fix". Specific tasks sampled as evidence: PLAT-01A, PLAT-01B, PLAT-01D, STOR-01A, STOR-01B, PLUG-02A, PLUG-02B, PLUG-02C. After round 4's principle changes, re-running the pipeline on the same strategic spec and comparing these same tasks gives a concrete before/after.
+
+### OBS-08 — Design Gap — Low/Medium (surfaced during Phase 2 output review, 2026-04-11)
+
+- **When:** After Phase 2 completion, noticed that Claude's Stage 1 summary used the phrase *"consider serializing in **wave planning**"* to describe scheduling the three high-risk capabilities. "Wave" is Hydro-specific terminology, but the pipeline is methodology-agnostic until Phase 3 Stage 2 (ingestion). This is a language leak
+- **The gap:** Decomposition is methodology-agnostic by design — the round-1 design finding explicitly says *"Methodology enters at ingestion (Stage 3b/4), not before — project initialization before dry-run"*. The current initialization check sits at `skills/decompose-validate/SKILL.md:65-77` (Phase 3 Stage 2, after structural review, before dry-run), which matches the intent. But Claude's synthesis in Phase 1 and Phase 2 can leak methodology-specific terminology into chat summaries and — potentially — written artifacts
+- **Verification of current state (2026-04-11):**
+  - **Canvas on disk:** zero strict matches for `wave|waves|sprint|cycle|bet` (verified with grep)
+  - **Technical spec on disk:** zero strict matches (verified with grep)
+  - **Chat-level Stage 1 summary:** ONE leak — *"consider serializing in wave planning"*
+  - **Monitor session's own summary** (mine, echoing Claude's output): also leaked "wave planning" while describing the result. Same leak, different speaker
+  - **Initialization check location:** correct — `decompose-validate` Stage 2, unchanged. No structural issue with when the check fires
+- **Why this matters:**
+  - Pre-commits the user to a specific methodology before they've explicitly chosen one
+  - Biases the refine skill's suggestions (if user edits the spec assuming wave-based planning, the spec bakes it in)
+  - Undermines the "methodology-agnostic until ingestion" design intent from round 1
+  - Low-Medium severity right now because written artifacts are clean. Would escalate to Medium if the summary habit migrates into written output — which is plausible once the refine skill is editing descriptions
+- **Severity:** Low-Medium. Written artifacts are clean; the leak is only in chat summaries so far
+- **Fix approach — principle + example (consistent with OBS-07's reframing and OBS-09's meta-concern):**
+
+One new principle added to `agents/technical-spec-writer.md` AND `agents/code-analyzer.md`:
+
+> **Methodology neutrality.** Decomposition is methodology-agnostic. Methodology enters at ingestion (Phase 3 Stage 2), not before. Task descriptions, capability descriptions, summaries, and any chat output in Phases 1 or 2 use neutral terminology. Methodology-specific terms (*wave*, *sprint*, *cycle*, *bet*, *pitch*, *epic-as-container*, *backlog*, *standup*, *retro*, etc.) indicate leakage — rephrase as "execution batch", "scheduling group", "when executed", "sequenced after", or similar neutral phrasing. If the strategic spec itself uses methodology-specific terminology, quote it verbatim (context preservation) but do not adopt the terminology in your own prose.
+
+One example block:
+
+```
+LEAK:
+  Consider serializing STOR-05, PLUG-02, and VIEW-05 in wave
+  planning despite the graph allowing parallelism — stress
+  testing bandwidth is limited.
+
+NEUTRAL:
+  Consider executing STOR-05, PLUG-02, and VIEW-05 sequentially
+  rather than in parallel when scheduling — stress testing
+  bandwidth is limited.
+
+WHAT MOVED: "wave planning" implied Hydro. "When scheduling" is
+methodology-agnostic — still captures the constraint without
+presupposing a container type.
+```
+
+**Propagation to skill-level summary instructions:**
+
+`skills/decompose/SKILL.md` (Stage 1 summary) and `skills/decompose-tasks/SKILL.md` (Stage 1c summary) each get one short line: *"The summary must be methodology-neutral. Methodology enters at ingestion (Phase 3 Stage 2)."* One line, not a forbidden-term list.
+
+**No changes to `skills/decompose-validate/SKILL.md`** — the initialization check is correctly placed. The round-1 design finding is upheld.
+
+#### Round 4 scope additions (over and above OBS-06 and OBS-07)
+
+- `agents/technical-spec-writer.md` — **1 new principle** (methodology neutrality, added alongside OBS-07's intent-over-prescription principle)
+- `agents/code-analyzer.md` — **same principle** added (shared text across both agents)
+- One **example block** at the agent level demonstrating the leak → neutral pattern
+- `skills/decompose/SKILL.md` and `skills/decompose-tasks/SKILL.md` — one-line reminder in their Stage 1 summary instructions
+- No changes to the initialization check location — current placement at `decompose-validate` Stage 2 matches the round-1 design intent
+- Calibration signal: after round 4, re-run the pipeline on the same strategic spec and grep the chat-output summaries for methodology terms. Zero matches = fix landed
+
+### OBS-09 — Design Meta — Low (surfaced 2026-04-11 during OBS-07 / OBS-08 scoping)
+
+- **When:** While scoping fixes for OBS-07 (prescription balance) and OBS-08 (methodology neutrality), realized the proposed fixes were themselves over-prescriptive toward the agents — piling on rules, enforcement lists, detection patterns, and forbidden-term tables. User caught the irony: OBS-07 complains that `technical-spec-writer` over-prescribes to implementer agents, then proposes to fix it by over-prescribing to `technical-spec-writer`
+- **The concern — agent definitions can accumulate rules until the cumulative effect is harmful:**
+  - **Cognitive overload.** Every rule is a mental constraint the agent has to check. Past a threshold, agents spend more energy rule-checking than problem-solving
+  - **Rule conflicts.** "Be specific" vs. "leave room for implementation" point opposite directions. Without clear hierarchy, resolution is inconsistent
+  - **Literal-mindedness.** Agents following many rules become rule-followers. They check the letter, miss the spirit. A *"don't use 'wave'"* rule gets followed while *"sprint backlog"* slips through
+  - **Reduced judgment.** The more explicit rules, the less the agent thinks. This is exactly the failure mode OBS-07 identifies for implementer agents
+  - **Diminishing returns.** Each new rule is marginally less effective than the previous. After ~7-10 rules per agent, marginal value turns negative
+- **Current state — quantified:**
+  - `agents/code-analyzer.md`: 7 numbered rules + mode-specific instructions for three modes
+  - `agents/technical-spec-writer.md`: Rules section with ~6 numbered rules + multiple sub-sections of guidance
+  - `agents/spec-reviewer.md`: shorter, ~4 rules, likely fine
+  - `agents/project-manager/AGENT.md`: standalone agent, ~350 lines with many embedded guidance points
+  - Adding OBS-07's original proposal (3 rule additions per agent + include/exclude lists) + OBS-08's original proposal (forbidden-term list) would push `code-analyzer.md` past 11+ rules and `technical-spec-writer.md` past 10+. That's into diminishing-returns territory at best, harmful at worst
+- **The framing shift:** treat the agent as a **capable reasoner** that needs framing and examples, not a **compliance officer** that needs commandments. Better mix of guidance mechanisms:
+
+  | Mechanism | Good for | Bad for |
+  |---|---|---|
+  | **Principles** (3-5 max per agent) | High-level framing, transferring intent | Hard enforcement |
+  | **Concrete examples** (good vs bad) | Pattern-matching, capturing nuance | Enumerating edge cases |
+  | **Hard rules** (2-3 max) | Non-negotiables, safety constraints | Judgment calls |
+  | **Retrospective self-checks** | Catching final-pass violations | Interrupting flow |
+  | **Forbidden-term / include-exclude lists** | (almost never good) | Literal-mindedness, whack-a-mole |
+
+- **Applied retroactively to OBS-07 and OBS-08:** both have been reframed as **principle + concrete example**, not rule lists. OBS-07 drops the include/exclude list; OBS-08 drops the forbidden-term list
+- **Round 4 scope addition — full rule audit across all plugin agents and skills:**
+
+  **Goal: net reduction in rule count with the same or better behavioral coverage.** Replace rules with principles + examples where possible. Consolidate redundant rules. Remove aspirational rules that don't affect behavior.
+
+  Scope of the audit:
+  - `agents/code-analyzer.md` — 7 numbered rules + mode-specific instructions. Consolidate where possible; replace rule-shaped guidance with principle + example where appropriate
+  - `agents/technical-spec-writer.md` — Rules section + sub-sections. Consolidate
+  - `agents/spec-reviewer.md` — shorter but worth reviewing for the same patterns
+  - `agents/project-manager/AGENT.md` — standalone governance agent, full audit
+  - All recently-edited skills (`skills/decompose/SKILL.md`, `skills/decompose-tasks/SKILL.md`, `skills/decompose-validate/SKILL.md`) — look for rule accumulation especially in the post-round-3 rewrites
+
+  Audit criteria per rule:
+  - **Hard constraint or judgment call?** Hard constraints stay as rules; judgment calls become principles
+  - **Redundant with another rule?** Consolidate
+  - **Conflicts with another rule?** Resolve with explicit priority, or remove the weaker rule
+  - **Can be replaced with an example that teaches the same thing?** Prefer example
+  - **Aspirational or actually affects behavior?** Remove if aspirational
+  - **Does the rule use enforcement language ('MUST', 'NEVER', 'ALWAYS') for something that's actually a judgment call?** Downgrade to principle
+
+- **Round 4 scope:** the audit is companion work to OBS-07 / OBS-08 fixes. Net result should be an agent-definition set that is **shorter, clearer, and more rule-disciplined** — not bigger
+- **Severity:** Low as a bug (the pipeline works), but high as a design discipline concern. If round 4 ships OBS-07 / OBS-08 / OBS-06 fixes without this meta-audit, the agent definitions drift toward over-prescription exactly like the technical specs they produce. Avoiding that drift is a first-class goal of round 4
 
 ---
 
@@ -420,3 +668,40 @@ Rewrote Stage 1 of `skills/decompose-tasks/SKILL.md` to do the work inline. No s
 1. ~~Commit the Phase 2 fix (SKILL.md + report update)~~ — done in commit `f022610`
 2. In the same test session (don't start fresh — Phase 1 ran cleanly and left the canvas in place), re-invoke `/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md`. Expected: Claude reads `agents/technical-spec-writer.md` as a template, validates the canvas in Stage 1a, synthesizes the technical spec inline in Stage 1b, verifies in Stage 1c, ends with the forward-pointing guidance.
 3. If Phase 2 completes, continue to Phase 3 (`/ido4dev:decompose-validate`).
+
+### Phase 2 completion — fix validated (2026-04-11)
+
+After a fresh session was started (session caching issue per OBS-02 meant the earlier session couldn't pick up the committed fix) and Claude was given a direct path hint to `skills/decompose-tasks/SKILL.md`, Phase 2 ran to completion using the rewritten inline Stage 1 pattern.
+
+**Runtime evidence:**
+
+- Technical spec: `specs/ido4shape-enterprise-cloud-technical.md` — **1317 lines**, written inline by main Claude (not via `ido4dev:technical-spec-writer` subagent)
+- **29 capabilities** — 4 technical-only (INFRA-01 provisioning, PLAT-01 platform foundation, INFRA-02 operational baseline, PLAT-02 plugin parity harness) + 25 strategic (all preserved verbatim)
+- **94 tasks total** — significantly more thorough than round 2's 36 tasks. Average ~3.2 tasks per capability
+- **Self-correcting quality check during validation.** Claude caught a typo in VIEW-01A metadata (`effect: M` → `effort: M`) and fixed it via Edit. Exactly what the spec-writer's final-quality-check step is supposed to do
+- **Dependency graph validated.** No cycles, root tasks identified (INFRA-01A, INFRA-01B, PLAT-01A, PLAT-02A), critical path 11-12 hops, cross-capability edges documented as intentional and one-way
+- **End-of-Phase-2 guidance is verbatim** — the exact forward-pointing text from SKILL.md: *"✓ Technical spec ready at specs/ido4shape-enterprise-cloud-technical.md. Review it, then run /ido4dev:decompose-validate specs/ido4shape-enterprise-cloud-technical.md when you're ready to validate and optionally ingest."* Claude STOPPED after the guidance. **OBS-08 (Phase 2 checkpoint) CLOSED.**
+- **Implicit OBS-10 test — passing.** Claude explicitly noted the REF pattern as `[A-Z]{2,5}-\d{2,3}[A-Z]?` (the post-fix parser regex from `@ido4/mcp` 0.7.1) and used suffixed refs throughout (`AUTH-03B`, `STOR-05D`, `VIEW-01A`, etc.). The parser fix is live and the writer is using it. Full OBS-10 closure requires Phase 3 dry-run acceptance.
+- Total runtime: **17m 41s**. Absolute time is slower than round 2's 9m 5s, but the output is 2× larger (1317 vs 660 lines) and has 2.6× more tasks (94 vs 36). On a per-task basis the throughput is comparable.
+
+**Quality signals beating round 2:**
+
+- **4 technical-only capabilities** (vs round 2's 1) — better coverage of cross-cutting gaps flagged in the canvas
+- **6 research spikes** guarding blocking decisions (auth vendor PLAT-01E, email vendor PLAT-01F, GCS scale STOR-01B, cold-start STOR-03C, orphan detection STOR-04B, diff perf STOR-06C, enqueue model PLUG-02A, role filter VIEW-05B, rendering 10MB VIEW-01C, export latency PROJ-04B)
+- **PLAT-02 wired as a hard dependency gate:** PLUG-01A depends on PLAT-02C, enforcing the parity test harness as a prerequisite for any PLUG capability. The canvas flagged parity-harness as the "most under-scoped piece of work" — Phase 2 elevated it to a structural constraint
+- **Canvas-flagged technical decisions captured:** 418 lock-warning HTTP convention rejected in favor of 200-with-flag (STOR-05B decision doc, PLUG-03C consumes that shape directly); PROJ-03 auto-summary moved plugin-side to preserve D9 (PROJ-03C)
+- **High-risk capabilities from canvas** (STOR-05, PLUG-02, VIEW-05) carry dedicated chaos test tasks and the Phase 2 warning flags serializing them during wave planning despite the graph allowing parallelism
+
+**Round 2 observation closures — Phase 2 tally:**
+
+| Round 2 OBS | Status after Phase 2 |
+|---|---|
+| OBS-08 (no Phase 2 checkpoint) | ✅ **CLOSED** — structural enforcement works, forward-pointing guidance verbatim, STOP after guidance |
+| OBS-10 (parser/writer contradiction) | ✅ **PARTIALLY CLOSED** — parser regex `[A-Z]{2,5}-\d{2,3}[A-Z]?` confirmed in effect at Phase 2, writer is using suffixed refs. Full closure requires Phase 3 dry-run to confirm the parser accepts the written spec |
+| OBS-09 (Phase 3 handoff) | Pending — needs `/ido4dev:decompose-validate` |
+
+### Next steps after Phase 2
+
+1. Run `/ido4dev:decompose-validate specs/ido4shape-enterprise-cloud-technical.md` in the same fresh test session.
+2. **Expect `spec-reviewer` to hang the same way** `code-analyzer` and `technical-spec-writer` did — the plugin-defined subagent pattern is the common failure. If it does, apply the same inline-synthesis fix to `skills/decompose-validate/SKILL.md` (even simpler than Phase 2 — spec-reviewer is pure validation, no synthesis).
+3. After Phase 3 completes, validate: OBS-09 (forward-pointing guidance at each verdict branch), OBS-10 (parser accepts the suffixed refs during dry-run), and the end-to-end pipeline.

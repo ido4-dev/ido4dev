@@ -5,7 +5,7 @@ user-invocable: true
 allowed-tools: mcp__plugin_ido4dev_ido4__*, Read, Glob, Grep
 ---
 
-You are phase 3 of the decomposition pipeline. You take a technical spec (produced by Phase 2, `/ido4dev:decompose-tasks`) and run it through structural review, ingestion preview, and optional ingestion to GitHub.
+You are phase 3 of the decomposition pipeline. You take a technical spec (produced by Phase 2, `/ido4dev:decompose-tasks`) and run it through structural review, ingestion preview, and optional ingestion to GitHub. Phase 3 Stage 1 (structural review) is pure validation — format compliance, content quality, and dependency graph integrity. You do the review inline, following the rules in `agents/spec-reviewer.md`.
 
 ## Pipeline Context
 
@@ -36,23 +36,93 @@ Otherwise, verify the technical spec file exists at `$ARGUMENTS`. If not, report
 
 ---
 
-## Stage 1: Structural Review (no project config needed)
+## Stage 1: Structural Review (inline, no project config needed)
 
-Spawn the **spec-reviewer** agent (defined at `agents/spec-reviewer.md`, model: sonnet). Read the agent definition and compose a prompt that includes:
+`agents/spec-reviewer.md` is a **review protocol and rules reference**, not a subagent to spawn. Read it now to internalize:
 
-1. The agent's full instructions from the definition file
-2. The technical spec file path (from `$ARGUMENTS`)
-3. Instruction: "Produce a structured review report"
+1. The two-stage review protocol (format compliance first, then quality assessment)
+2. Format compliance checks (project header, capability headings, task headings, ref pattern, metadata keys and values, `depends_on` references, no circular dependencies)
+3. Quality assessment checks (description substance, code-grounding, success condition specificity, effort/risk grounding, AI-suitability appropriateness, capability coherence, dependency graph sense)
+4. Governance implications check (`ai: human`, `risk: critical`, cross-capability deps)
+5. Validation rules (classify issues as Error / Warning / Suggestion, independently verify each issue before reporting)
+6. Output format (Spec Review Report with summary, errors, warnings, suggestions, governance notes, dependency graph)
 
-The spec-reviewer will check format compliance, content quality, dependency graph integrity, and governance implications.
+Phase 3 Stage 1 is pure validation — format + quality + graph integrity. No synthesis. No subagents. Main Claude (you) does the review directly.
 
-**When the agent completes:**
+### Stage 1a: Read the technical spec
 
-Present the review findings to the user:
+Read the technical spec file at `$ARGUMENTS` using the `Read` tool. You will analyze it against the review protocol in `agents/spec-reviewer.md`.
 
-- Verdict: PASS / PASS WITH WARNINGS / FAIL
-- Error count, warning count, suggestion count
-- Any governance-impacting values (`ai: human`, `risk: critical`, heavy cross-capability deps)
+### Stage 1b: Format compliance review
+
+Systematically check every structural element against the parser's exact expectations (from `agents/spec-reviewer.md` Stage 1: Format Compliance):
+
+- Project header: exactly one `#` heading with `>` description
+- Capability headings: `## Capability: Name` format, `>` metadata with `size` and `risk`
+- Task headings: `### REF: Title` where REF matches `[A-Z]{2,5}-\d{2,3}[A-Z]?` (letters + optional suffix per `@ido4/mcp` 0.7.1)
+- Task prefix matches parent capability prefix (e.g., `NCO-` tasks under "Notification Core")
+- Metadata keys (exact, lowercase): `effort`, `risk`, `type`, `ai`, `depends_on`
+- Metadata values from allowed sets: effort (S/M/L/XL), risk (low/medium/high/critical), type (feature/bug/research/infrastructure), ai (full/assisted/pair/human)
+- All `depends_on` references point to existing task IDs in the document
+- No circular dependency chains (trace the full graph)
+
+Use `Grep` to verify counts and catch regex violations quickly. Use `Read` with line offsets to spot-check specific sections.
+
+### Stage 1c: Quality assessment review
+
+From `agents/spec-reviewer.md` Stage 2: Quality Assessment. For each task:
+
+- Description ≥200 characters with substantive content (not just title restatement)
+- Descriptions reference specific code paths, services, or patterns (technical specs should be codebase-grounded)
+- Success conditions present, specific, independently verifiable, code-testable
+- Effort estimates grounded in code reality
+- Risk assessments reflect actual codebase complexity
+- AI suitability appropriate (external integrations shouldn't be `full`; schema definitions can be `full`)
+- Capabilities coherent (2-8 tasks, tasks related to capability purpose)
+- Dependency graph sensible (critical path makes sense, minimal cross-capability deps)
+
+### Stage 1d: Governance implications check
+
+Review values with downstream governance impact:
+
+- `ai: human` blocks start transition — is this intentional and justified?
+- `risk: critical` maps to High + label — does it truly warrant elevated attention?
+- Cross-capability dependencies create coordination requirements — are they minimized?
+- Effort distribution across capabilities — any capability disproportionately heavy?
+
+### Stage 1e: Produce the review report
+
+Classify each issue found as **Error** (will cause ingestion to fail), **Warning** (won't fail but indicates a quality problem), or **Suggestion** (not wrong but could be better). Before reporting any issue, independently verify it — false positives erode trust.
+
+Present the review report to the user in the exact format from `agents/spec-reviewer.md`:
+
+```markdown
+# Spec Review Report
+
+## Summary
+- File: [path]
+- Capabilities: [N] | Tasks: [N]
+- Errors: [N] | Warnings: [N] | Suggestions: [N]
+- Verdict: [PASS | PASS WITH WARNINGS | FAIL]
+
+## Errors
+[Each error with task ref, line reference, explanation, fix suggestion]
+
+## Warnings
+[Each warning with context and recommendation]
+
+## Suggestions
+[Each suggestion with reasoning]
+
+## Governance Notes
+[Values that will trigger specific BRE behavior]
+
+## Dependency Graph
+- Root tasks: [list]
+- Critical path: [chain]
+- Cross-capability deps: [list]
+- Cycles: [none | details]
+```
 
 ### Handle the verdict
 
@@ -103,6 +173,6 @@ Only proceed if the user explicitly approved the Stage 2 preview with "yes", "pr
 
 - **Missing spec path**: stop and ask, as specified in Stage 0.
 - **Spec file not found**: report the missing path and stop.
-- **Agent failure (spec-reviewer)**: Report the failure. Do not retry automatically — ask the user if they want to re-run.
+- **Review synthesis failure**: If the review report is incomplete or you cannot reach a verdict, report the failure specifically. Do not retry automatically — ask the user if they want to re-run Phase 3 or abort.
 - **Dry-run validation errors**: Report which tasks or dependencies caused issues. Suggest fixes in the technical spec and ask the user to update it and re-run `/ido4dev:decompose-validate`.
 - **Ingestion failures**: Report which issues failed and why. Surface the GitHub errors directly.

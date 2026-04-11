@@ -26,6 +26,7 @@ When something is missing (spec file path, methodology choice, project configura
 - Report progress at stage boundaries, not individual tool calls.
 - Report DECISIONS and FINDINGS.
 - Be concise — highlight surprises, not expected patterns.
+- **Track progress via a task list.** At the start of this skill, create a task list (using `TodoWrite` or your equivalent task-tracking tool) with one entry per stage and sub-stage: *Stage 0: Parse strategic spec*, *Stage 0.5: Determine artifact dir and project mode*, *Stage 1a: Explore integration targets in parallel*, *Stage 1b: Read the strategic spec*, *Stage 1c: Synthesize technical canvas*, *Stage 1d: Verify and write canvas*. Mark each entry `in_progress` when you begin it and `completed` when done. This gives the user visible progress through long-running work.
 
 Use `$ARGUMENTS` as the path to the strategic spec file.
 

@@ -101,6 +101,19 @@
   - **(c)** Explicit instruction in the user-facing docs: advise users to first run `Read` on the skill file manually before invoking the skill. Poor UX but unblocks usage
   - **(d)** Consider whether the `user-invocable: true` frontmatter field is supposed to imply auto-delivery — if yes, this is a bug in Claude Code's Skill tool
 - **Recovery path observed:** Once Claude finds and reads SKILL.md (via the discovery bash commands), it then proceeds to execute Phase 1 correctly. The drift is in the pre-execution discovery phase, not in the skill execution itself. This means the skill definition is sound; the platform just needs to deliver it
+- **Revised severity assessment (2026-04-11) — INCONSISTENT, trigger conditions unknown:** After multiple fresh-session observations, OBS-02 is confirmed inconsistent. The pattern:
+  - Phase 1 (fresh session #1): discovery detour hit
+  - Phase 2 (fresh session #2): discovery detour hit, needed direct path hint to recover
+  - Phase 3 (fresh session #3): **NO discovery detour** — `decompose-validate` loaded and executed cleanly on first invocation, no broad search, no hint needed
+- **Initial hypothesis (session context continuity) is incorrect.** All three Claude sessions above were confirmed fresh by the user, not continuations of a prior session. Yet discovery behavior differed between them with no obvious trigger from the user-visible side.
+- **Unresolved candidate explanations:**
+  1. **Claude Code has some plugin cache that warms with usage** — possibly at the OS/filesystem level (APFS directory listing cache), possibly an internal plugin index. First touches are slow; later touches are warm. Doesn't quite fit because multiple fresh Claude sessions should reset Claude-level state
+  2. **Stochastic discovery path in Claude itself** — first-action choice on skill load may be probabilistic. Sometimes it tries working-tree paths directly, sometimes it goes broad. Depends on subtle session-initial-state differences
+  3. **Skill-name or skill-structure dependent** — `decompose-validate` may be more findable than `decompose` or `decompose-tasks` for reasons not yet identified. Unlikely but not impossible
+  4. **Claude Code version regression** — 2.1.101 may have improved plugin-discovery heuristics, but there's still a fallback path under certain conditions
+- **Severity revised back to Medium.** Inconsistent failure is worse from a UX standpoint than a predictable bootstrap cost — users can't plan around it. Not a blocker for round 3 (we've learned how to recover when it happens: direct path hint), but deserves deeper investigation in round 4+
+- **Round 4 investigation task:** instrument discovery-path tracing or reproduce the inconsistency systematically to identify trigger conditions. Consider priming approaches (SessionStart hook exposing plugin layout) that would eliminate the problem regardless of the root cause
+- **Recovery path is known and works:** when Claude hits the discovery detour, a direct path hint (`"The {skill} skill is at /Users/.../ido4dev/skills/{skill}/SKILL.md. Read that file and execute..."`) always recovers cleanly. Users who hit it can unblock themselves in one message
 
 ### OBS-03 — Behavioral Drift — Medium (recurrence of round-1 OBS-05)
 
@@ -438,6 +451,26 @@ presupposing a container type.
 
 - **Round 4 scope:** the audit is companion work to OBS-07 / OBS-08 fixes. Net result should be an agent-definition set that is **shorter, clearer, and more rule-disciplined** — not bigger
 - **Severity:** Low as a bug (the pipeline works), but high as a design discipline concern. If round 4 ships OBS-07 / OBS-08 / OBS-06 fixes without this meta-audit, the agent definitions drift toward over-prescription exactly like the technical specs they produce. Avoiding that drift is a first-class goal of round 4
+
+### OBS-10 — UX Inconsistency — Low (fixed 2026-04-11)
+
+- **When:** During the Phase 3 retest, noticed that Phase 3 did NOT display the visible task-list UI that Phase 1 and Phase 2 had shown during their runs. User provided screenshots confirming that Phase 1 and Phase 2 rendered a task list with checkoff state (e.g., *"Stage 0: Parse strategic spec"* with `◼` in-progress marker and `□` pending markers for later stages), but Phase 3's execution did not show any such task list in the transcript
+- **The gap:** Inconsistent UX across phase skills. Phase 1 and Phase 2 showed task-list visibility during long-running work; Phase 3 did not. User had to infer progress from "Actualizing..." and tool-count indicators instead of a structured checklist
+- **Root cause:** **None of the phase skills explicitly instructed task-list creation.** Phase 1 and Phase 2 got task lists because Claude happened to use `TodoWrite` (or equivalent) on its own heuristic. Phase 3 didn't get one because Claude didn't trigger that heuristic in that session — probably because Phase 3's sub-stages (read spec → format check → quality check → governance check → report) feel like one reviewing activity rather than discrete tasks
+- **Why this matters:** The task list is high-value UX for users watching a long-running pipeline. Without it, the user is blind to "what's Claude doing right now? how much is left?" during multi-minute stages. Inconsistent UX across phases feels like a quality gap
+- **Severity:** Low — UX only, not a correctness or reliability issue. But easy to fix
+- **Fix applied (2026-04-11):** Added one bullet to the Communication section of each phase skill:
+
+  > **Track progress via a task list.** At the start of this skill, create a task list (using `TodoWrite` or your equivalent task-tracking tool) with one entry per stage and sub-stage: [specific stages enumerated]. Mark each entry `in_progress` when you begin it and `completed` when done. This gives the user visible progress through long-running work.
+
+  Specific stage enumeration differs per phase:
+  - **`decompose`:** Stage 0 / 0.5 / 1a / 1b / 1c / 1d
+  - **`decompose-tasks`:** Stage 1a / 1b / 1c
+  - **`decompose-validate`:** Stage 1a / 1b / 1c / 1d / 1e, plus Stage 2 and Stage 3 if the skill reaches them
+
+- **Expected behavior in future tests:** all three phase skills show a visible task list at the start of execution, with each sub-stage checked off as Claude completes it
+- **Worth verifying in round 4 calibration tests:** when the unified `decompose-refine` skill is built (OBS-06), it should include the same task-list instruction for consistency
+- **Caveat about the current test run:** the fix is in the committed SKILL.md files but doesn't affect the currently-running Phase 3 test (it started with the old instructions and is already in progress). Future invocations — including any round-3 retests and all of round 4 — will get the task-list UX
 
 ---
 

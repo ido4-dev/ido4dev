@@ -19,6 +19,7 @@ Never auto-resolve user decisions. If the canvas path is missing, ASK and STOP. 
 
 - Report progress at stage boundaries, not individual tool calls.
 - Report DECISIONS and FINDINGS.
+- **Track progress via a task list.** At the start of this skill, create a task list (using `TodoWrite` or your equivalent task-tracking tool) with one entry per sub-stage: *Stage 1a: Read and validate canvas*, *Stage 1b: Decompose and synthesize the technical spec*, *Stage 1c: Verify and summarize*. Mark each entry `in_progress` when you begin it and `completed` when done. This gives the user visible progress through long-running work.
 
 Use `$ARGUMENTS` as the path to the technical canvas file (produced by Phase 1).
 

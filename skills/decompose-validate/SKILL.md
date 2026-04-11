@@ -19,6 +19,7 @@ Never auto-resolve user decisions. Methodology choice, project initialization, a
 
 - Report progress at stage boundaries, not individual tool calls.
 - Report verdicts, findings, and decisions.
+- **Track progress via a task list.** At the start of this skill, create a task list (using `TodoWrite` or your equivalent task-tracking tool) with one entry per sub-stage: *Stage 1a: Read technical spec*, *Stage 1b: Format compliance review*, *Stage 1c: Quality assessment review*, *Stage 1d: Governance implications check*, *Stage 1e: Produce review report*, and (if the verdict is PASS and the skill proceeds) *Stage 2: Ingestion preview*, *Stage 3: Ingest (only on explicit user approval)*. Mark each entry `in_progress` when you begin it and `completed` when done. This gives the user visible progress through long-running work.
 
 Use `$ARGUMENTS` as the path to the technical spec file (produced by Phase 2).
 

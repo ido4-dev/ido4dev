@@ -5,7 +5,7 @@ user-invocable: true
 allowed-tools: Read, Write, Glob, Grep
 ---
 
-You are phase 2 of the decomposition pipeline. You take a technical canvas (produced by Phase 1, `/ido4dev:decompose`) and spawn the technical-spec-writer agent to produce a **technical spec** — a markdown artifact in the format that ido4's ingestion pipeline (`ingest_spec`) can parse.
+You are phase 2 of the decomposition pipeline. You take a technical canvas (produced by Phase 1, `/ido4dev:decompose`) and produce a **technical spec** — a markdown artifact in the format that ido4's ingestion pipeline (`ingest_spec`) can parse. Phase 2 is a pure transform: canvas in, technical spec out. You do the work inline, following the template and rules in `agents/technical-spec-writer.md`.
 
 ## Pipeline Context
 
@@ -39,27 +39,75 @@ Otherwise:
 
 ---
 
-## Stage 1: Write the Technical Spec
+## Stage 1: Write the Technical Spec (inline)
 
-Spawn the **technical-spec-writer** agent (defined at `agents/technical-spec-writer.md`, model: opus). Read the agent definition and compose a prompt that includes:
+`agents/technical-spec-writer.md` is a **template and rules reference**, not a subagent to spawn. Read it now to internalize:
 
-1. The agent's full instructions from the definition file
-2. The canvas file path (from `$ARGUMENTS`)
-3. The artifact directory path and output instruction: "Write the technical spec to `{artifact-dir}/{spec-name}-technical.md`"
+1. The technical spec output format (exact structure the `spec-parser.ts` parser consumes — project header, capability headings, task metadata format, task-ref pattern)
+2. The Goldilocks principle for task sizing (not too small, not too big, one coherent concept per task)
+3. Metadata assessment rules (effort S/M/L/XL, risk low/medium/high/critical, type feature/bug/research/infrastructure, ai full/assisted/pair/human — all grounded in the canvas's complexity assessment)
+4. Technical capability rules (when to create PLAT-/INFRA-/TECH- prefixed capabilities for shared infrastructure that doesn't map to strategic capabilities)
+5. The critical rules — every metadata value traceable to canvas, stakeholder attributions preserved, success conditions code-verifiable, output parseable by `spec-parser.ts`
 
-The spec-writer agent will read the canvas, validate it has sufficient context (its Step 0), decompose capabilities into right-sized tasks, and write the technical spec in the ingestion-ready format.
+Phase 2 is a pure transform — canvas in, technical spec out. No exploration needed. No subagents needed. Main Claude (you) does the work directly.
 
-**When the agent completes:**
+### Stage 1a: Read and validate the canvas
 
-Verify the technical spec file was written to the expected path. If not, report the failure (see Error Handling).
+Read the canvas file at `$ARGUMENTS` using the `Read` tool. Before decomposing anything, verify the canvas has:
 
-Present the agent's summary to the user:
+- Per-capability sections (`## Capability:` headings — not just summary tables)
+- Strategic context carried forward in each capability (descriptions + success conditions from the strategic spec, not one-line summaries)
+- Cross-cutting concern mapping with per-concern detail (not just a summary table)
+- Dependency layers or ordering information
 
-- Technical spec file path
-- Number of capabilities (strategic + any technical-only capabilities with their ref prefixes)
-- Total task count
-- Dependency graph overview (root tasks, critical path length, cross-capability deps)
-- Any warnings or flags from the spec-writer
+If any are missing, STOP and report: *"Canvas is incomplete — [specific missing element]. Re-run `/ido4dev:decompose` to regenerate the canvas before continuing Phase 2."* Do NOT attempt to produce tasks from an incomplete canvas — the quality will be unacceptable and the downstream validation in Phase 3 will flag it anyway.
+
+### Stage 1b: Decompose and write the technical spec
+
+Following the template and rules in `agents/technical-spec-writer.md`:
+
+1. **Identify shared infrastructure** across capabilities — types, interfaces, services, database changes that multiple capabilities need. Create infrastructure tasks in the most-relevant capability (the earliest in the dependency chain). If the canvas reveals shared infrastructure that does NOT map to any strategic capability, create a technical-only capability with a `PLAT-`, `INFRA-`, or `TECH-` prefix placed BEFORE strategic capabilities.
+
+2. **Decompose each strategic capability** in strategic dependency order (must-have groups first, then should-have, then nice-to-have; within priority, leaves first). For each capability:
+   - Review the canvas analysis: relevant modules/integration targets, patterns found, complexity assessment, risk factors
+   - Determine task granularity using the Goldilocks principle
+   - Write each task with:
+     - Specific file paths and patterns from the canvas (not vague like "update the service")
+     - Stakeholder context carried forward verbatim ("Per Marcus: needs idempotency key")
+     - Cross-cutting constraints woven in (performance, security, observability)
+     - Code-verifiable success conditions (at least 2 per task)
+   - Assign metadata grounded in the canvas complexity assessment — do NOT guess
+   - Set dependencies (functional from strategic spec + code-level from canvas)
+
+3. **Validate the dependency graph** before writing:
+   - No circular dependencies
+   - All `depends_on` references point to tasks that exist in the spec
+   - Topological order makes sense (can you actually build this in this order?)
+   - Shared infrastructure tasks appear before the tasks that need them
+
+4. **Final quality check per task**:
+   - Description ≥200 characters with substantive content
+   - At least 2 success conditions
+   - Effort/risk consistent with canvas complexity assessment
+   - Type correct (don't classify infrastructure as feature)
+   - AI suitability reflects actual code patterns (not wishful thinking)
+   - Every capability description includes group context (*"Part of [Group Name] ({priority}) — [why this group matters]"*)
+   - Every task with applicable cross-cutting concerns references them
+
+Use the `Write` tool to write the complete technical spec to `{artifact-dir}/{spec-name}-technical.md`. The output MUST be parseable by `spec-parser.ts` — exact heading patterns, exact metadata keys and allowed values, exact blockquote conventions.
+
+### Stage 1c: Verify and summarize
+
+1. Verify the technical spec file was written to the expected path.
+2. Count capabilities and tasks in the written file:
+   - `grep -c '^## Capability:' {path}` — capability count (should match canvas count, plus any technical-only capabilities you added)
+   - `grep -c '^### [A-Z]' {path}` — task count
+3. Present the Stage 1 summary to the user:
+   - Technical spec file path and line count
+   - Number of capabilities (strategic + any technical-only with their ref prefixes)
+   - Total task count
+   - Dependency graph overview: root tasks (no deps), critical path length, any cross-capability dependencies
+   - Any warnings or flags you surfaced during synthesis (e.g., "STOR-05 is marked high-risk — limited chaos-test bandwidth is a scoping concern for scheduling")
 
 ---
 
@@ -77,8 +125,8 @@ Then STOP. Do not invoke `/ido4dev:decompose-validate` yourself — the user re-
 
 - **Missing canvas path**: stop and ask, as specified in Stage 0.
 - **Canvas file not found**: report the missing path and stop.
-- **Agent failure**: If the technical-spec-writer agent fails or produces incomplete output, report the failure. Do not retry automatically — ask the user if they want to re-run Phase 2.
-- **Canvas incomplete**: If the spec-writer reports the canvas is incomplete (missing per-capability sections, missing strategic context, only summary tables), stop and tell the user to re-run `/ido4dev:decompose` to regenerate the canvas.
+- **Synthesis failure**: If the technical spec you produce is incomplete (missing capability sections, missing task metadata, malformed), report the failure. Do not retry automatically — ask the user if they want to re-run Phase 2 or abort.
+- **Canvas incomplete**: If Stage 1a's canvas validation fails (missing per-capability sections, missing strategic context, only summary tables), stop and tell the user to re-run `/ido4dev:decompose` to regenerate the canvas.
 
 ## Files Produced
 

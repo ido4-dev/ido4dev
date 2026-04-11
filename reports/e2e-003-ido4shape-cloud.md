@@ -160,6 +160,36 @@ During round-3 diagnosis, after multiple failed attempts to complete Phase 1's c
 - **Interpretation:** Possibly Claude adapting after observing the previous 40-min hang. This would be emergent cautious behavior rather than skill drift
 - **Fix candidate:** Consider adding an explicit pre-spawn user-optional checkpoint to Stage 1 as a deliberate design choice — e.g., "Before spawning the code-analyzer (which takes 10-20 min), offer the user the chance to review or adjust the agent prompt." This would turn Claude's emergent cautious behavior into a stable, documented skill feature
 
+### OBS-06 — Design Gap — Medium (surfaced during Phase 1 completion, 2026-04-11)
+
+- **When:** Post-Phase-1 completion. User is reviewing the canvas that Claude produced and realized the pipeline offers no structured way to add their own technical knowledge to the canvas before Phase 2 consumes it
+- **The gap:** Phase 1 ends with *"Review the canvas, then run `/ido4dev:decompose-tasks`"*. This is a **passive review** — the technical user (who drives and consumes the decompose pipeline) can read the canvas and decide whether to proceed, but has no supported way to *add, correct, or extend* the canvas content. If the code-analyzer (or now, the inline Stage 1c synthesis) misses technical details the user knows — existing system constraints, avoided patterns, additional non-functional requirements, user-specific context about integration targets — that knowledge is either lost (user forgets or doesn't bother), or injected later at the wrong stage (Phase 2 discovery, which is meant to be mechanical decomposition), or forced in via manual canvas editing without guardrails (silent edits may break the spec-writer's consumption in Phase 2 — verbatim strategic context preservation, group coherence context, template structure)
+- **Why this matters:** The pipeline is AI-hybrid development governance. The human-in-the-loop value is specifically at these between-phase checkpoints. A passive "proceed or not" gate doesn't capture the user's technical knowledge — it only gates its propagation
+- **Severity:** Medium. Not a bug, not a blocker. The pipeline works without it. But it's a missing capability that undermines the "collaborative specification" value proposition of the plugin
+- **Recommended fix (deferred to round 4, not blocking round 3 completion):** Add a new optional skill `/ido4dev:decompose-refine` positioned between Phase 1 and Phase 2:
+  - Phase 1: `/ido4dev:decompose` produces canvas
+  - Phase 1.5 (optional): `/ido4dev:decompose-refine <canvas-path>` facilitates collaborative canvas refinement
+  - Phase 2: `/ido4dev:decompose-tasks` consumes the (possibly refined) canvas
+  - Phase 3: `/ido4dev:decompose-validate` validates + ingests
+- **How the refine skill should work (sketch):**
+  1. Read the canvas and `agents/code-analyzer.md` (template + context-preservation rules)
+  2. Open with a short canvas summary + prompt: *"What would you like to refine? You can describe additions/corrections in natural language, point at specific sections, or ask questions to help decide."*
+  3. Per user turn: either answer a question, propose an edit in diff form (apply after approval), or flag a contradiction across sections
+  4. Guardrails enforced by Claude reading the code-analyzer template:
+     - Do not silently remove or rephrase verbatim strategic context
+     - Do not add new `## Capability:` sections (those come from strategic spec only)
+     - Do not reorder capabilities (dependency order is load-bearing)
+     - Do allow: additions to Complexity Assessment, Discoveries & Adjustments, Code-Level Dependencies, Cross-Cutting Concern notes, technical constraints, per-capability context additions
+  5. Exit when user says done OR invokes `/ido4dev:decompose-tasks` directly. Forward-pointing guidance same pattern as other skills
+- **Why a new skill and not a Phase 1 extension:** Keeps phase-skill pattern consistent (one phase per skill), makes refinement explicitly optional, supports multiple refinement passes, matches existing conversational-skill patterns (`sandbox-explore`, `spec-quality`)
+- **Matches existing plugin patterns:** `sandbox-explore` (conversational discovery), `spec-quality` (conversational quality iteration) — the refine skill is the same conversational pattern applied to canvas editing
+- **Pre-requisites — none.** No changes to agents, MCP server, Phase 2, or Phase 3. Purely additive.
+- **Round-4 scope:**
+  - `skills/decompose-refine/SKILL.md` — new (~120 lines)
+  - `commands/decompose-refine.md` — new shim
+  - `skills/decompose/SKILL.md` — update end-of-Phase-1 guidance to mention refinement as an optional next step
+  - `README.md` + `CLAUDE.md` — skill count bump 23 → 24
+  - Commit + release as plugin v0.7.1 or v0.8.0
 
 ---
 
@@ -256,3 +286,96 @@ Rewrote Stage 1 of `skills/decompose/SKILL.md` to use the **working pattern** Cl
 2. Resume round-3 testing with a fresh session: `/ido4dev:decompose ido4shape-enterprise-cloud-spec.md`. Expected: Phase 1 completes via parallel Explore subagents + inline synthesis, produces the canvas, ends with the forward-pointing guidance (OBS-07 test).
 3. If Phase 1 completes, run `/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md`. Watch whether `technical-spec-writer` plugin-defined subagent hangs similarly — if it does, apply the same Stage 1 rewrite pattern to Phase 2.
 4. If Phase 2 completes, run `/ido4dev:decompose-validate specs/ido4shape-enterprise-cloud-technical.md`. Watch whether `spec-reviewer` plugin-defined subagent hangs — if it does, apply the same pattern to Phase 3. Also validates OBS-10 (parser suffix fix) via the dry-run.
+
+---
+
+## Post-fix Phase 1 Retest — In Progress (2026-04-11)
+
+Fresh Claude session, existing canvas moved aside, `/ido4dev:decompose ido4shape-enterprise-cloud-spec.md` invoked. The Stage 1 fix from commit `b414502` is live in the working tree.
+
+### Fix validation signals (positive)
+
+- **Claude found and read the updated `skills/decompose/SKILL.md`.** After an initial `find ~/.claude` search that returned empty (plugin is inline-loaded from the working tree, not from `~/.claude`), Claude located the skill file via subsequent searches and read it. The Stage 1 fix IS being loaded into Claude's context.
+- **Claude created a task list showing the new Stage 1 sub-stage structure.** The task list displayed: *"Stage 0: Parse strategic spec / Stage 0.5: Determine artifact dir and project mode / Stage 1a: Explore integration targets in parallel / Stage 1c: Synthesize technical canvas / Stage 1d: Verify and write canvas"*. The `Stage 1a` through `Stage 1d` naming comes from the rewritten SKILL.md — confirming the fix is being followed structurally.
+- **Minor quibble:** Stage 1b (read the strategic spec) did not appear as an explicit task in the visible list. Claude may have merged it into another sub-stage or treated it as implicit. Will verify whether verbatim strategic context is preserved when the canvas is written.
+
+### Recurring observations (pattern confirmation)
+
+These are NOT new observations — they are the same patterns from earlier in round 3, now confirmed as reproducible across multiple fresh sessions:
+
+- **OBS-02 (skill-body-not-delivered)** — Reproduces on every fresh session. Claude consistently has to discover and `Read` the SKILL.md file manually before it can execute the skill. The initial discovery phase involves Bash commands (`find ~/.claude -type f -name "SKILL.md"`) that return empty because the plugin is inline-loaded. Claude eventually finds the correct file by searching elsewhere, but it costs tool calls and confused first impressions. This is a platform behavior in the current Claude Code version, not a plugin issue.
+- **OBS-03 (shell workaround for MCP content)** — Reproduces. After finding the spec file, Claude proposes `cat spec.md | python3 -c "json.dumps(sys.stdin.read())" > /tmp/spec_content.json` as a preprocessing step before calling `parse_strategic_spec`. Third consecutive round exhibiting this. Root cause is still unclear but pattern is consistent: when Claude needs to pass large structured content to an MCP tool or extract data from an MCP response, it reaches for Bash + Python.
+
+### Pending validation — what we're watching for
+
+The fix's effectiveness depends on what happens at Stage 1a:
+
+- **If Stage 1a spawns multiple parallel built-in `Explore` subagents** (one per integration target) → the fix is working architecturally. Proceed to verify Stage 1c/1d and end-of-Phase-1 guidance.
+- **If Stage 1a still spawns `ido4dev:code-analyzer`** → the instructions weren't explicit enough; Claude is falling back to the plugin-defined agent from habit or from `agents/code-analyzer.md`'s own frontmatter description. Need to revise the SKILL.md wording to be more explicit (e.g., "Do NOT invoke `ido4dev:code-analyzer`. Spawn Claude Code's built-in Explore subagent type.").
+- **If Stage 1a hangs at all** → the issue wasn't plugin-vs-built-in subagent; it was something else we haven't isolated yet.
+
+### Fix validated at runtime (2026-04-11)
+
+**Stage 1a spawned exactly what the fix specifies.** Claude's output:
+
+> Stage 1a — Spawning parallel Explore subagents
+> Two integration targets identified from spec: ido4shape (PLUG group must modify it without breaking standalone parity) and ido4-MCP (downstream consumer of strategic spec artifacts via PROJ-03).
+> 2 background agents launched
+> ├─ Explore ido4shape plugin (running)
+> └─ Explore ido4-MCP (running)
+
+**Architectural validation checklist — all green:**
+
+- ✅ `agents/code-analyzer.md` read as a template reference (not spawned as a subagent)
+- ✅ Built-in `Explore` subagent type used (not `ido4dev:code-analyzer`)
+- ✅ One subagent per integration target (2 targets identified, 2 agents launched)
+- ✅ Parallelized ("2 background agents launched" — concurrent, not sequential)
+- ✅ Task list follows the new Stage 1a/1c/1d structure from the rewritten SKILL.md
+
+**Stages 0 and 0.5 also landed cleanly in the same run:**
+
+- ✅ Parser called successfully (0 errors, 0 warnings, 25 capabilities, 5 groups, 10 cross-cutting concerns)
+- ✅ Stage 0 summary includes all 4 required fields (project name, grouped capabilities with priorities, dependency structure, critical path) plus bonus CCC count and detail on cross-group edges
+- ✅ Stage 0.5 "Artifacts will be written to specs/" stated explicitly
+- ✅ Stage 0.5 "Detected mode: greenfield-with-context" with exact taxonomy name and justification tied to integration targets (PLUG group constraint, PROJ-03 handoff)
+
+**At 8m 2s, both Explore agents still running in parallel.** Expected completion within ~10-15 more minutes (parallelism should make this faster than round 2's 15m 24s monolithic code-analyzer). After the agents complete, Stage 1c synthesizes the canvas inline and Stage 1d verifies `## Capability:` count. Full Phase 1 should close with end-of-phase forward-pointing guidance (the OBS-07-from-round-2 check).
+
+### Phase 1 completion — all criteria met
+
+Both Explore subagents completed. Claude then synthesized the canvas inline, wrote it, and verified it — all in a single flow without hanging. **Total Phase 1 runtime: 13m 27s** (faster than round 2's 15m 24s baseline).
+
+**Runtime evidence:**
+
+- Canvas: `specs/ido4shape-enterprise-cloud-canvas.md` — **1666 lines**, written by main Claude inline (not by a subagent)
+- Verification step executed: *"Verification passed: 25 ## Capability: sections (matches the 25 strategic capabilities), 1666 lines."*
+- Stage 1 summary presented with comprehensive findings: shared infrastructure (role enum, heading-path format, email subsystem, audit_events table, parity-test harness), surprises/adjustments (STOR-01 can move to Layer 0), cross-cutting concern tensions (3 D9-related), Phase 2 readiness notes (auth vendor, email vendor, HTTP convention)
+- End-of-Phase-1 guidance: **exact match** to the skill's prescribed text — *"✓ Canvas ready at `specs/ido4shape-enterprise-cloud-canvas.md`. Review it, then run `/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md` when you're ready to produce the technical spec."*
+- Claude STOPPED after the guidance. Did not auto-proceed to Phase 2. **OBS-07 (Phase 1 checkpoint) structurally closed.**
+
+**Parallelism performance win:** round 2's monolithic code-analyzer took 15m 24s for the full scope (63 tool uses in a single agent). Round 3's post-fix parallel approach took 13m 27s end-to-end for Phase 1, with work distributed across two concurrent Explore subagents plus inline synthesis. The fix is not just reliable — it's faster.
+
+### Round 2 observation closures — final Phase 1 tally
+
+| Round 2 OBS | Status in round 3 |
+|---|---|
+| OBS-01 (auto-search for spec, no args) | Not tested (invocation artifact, not blocking) |
+| OBS-02 (skipped parser call) | ✅ **CLOSED** — `parse_strategic_spec` called explicitly |
+| OBS-03 (mislabeled pipeline) | ✅ **CLOSED** — "Phase 1", "Stage 0", "Stage 1a" labels throughout |
+| OBS-04 (artifact directory) | ✅ **CLOSED** — "Artifacts will be written to specs/" stated |
+| OBS-05 (mode taxonomy) | ✅ **CLOSED** — "Detected mode: greenfield-with-context" with exact name and justification |
+| OBS-06 (Stage 0 summary incomplete) | ✅ **CLOSED** — all 4 fields + bonus (10 CCCs, critical path, cross-group edge analysis) |
+| OBS-07 (no Phase 1 checkpoint) | ✅ **CLOSED** — structural enforcement via skill split works; end-of-phase guidance landed verbatim |
+| OBS-08 (no Phase 2 checkpoint) | Pending — requires running `decompose-tasks` |
+| OBS-09 (Phase 3 handoff script) | Pending — requires running `decompose-validate` |
+| OBS-10 (parser task-ref contradiction) | Pending — requires Phase 3 dry-run |
+
+### What's next
+
+Run `decompose-tasks` in the same test session (continuation of Phase 1's forward-pointing guidance):
+
+```
+/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md
+```
+
+**Critical question for Phase 2:** does `ido4dev:technical-spec-writer` plugin-defined subagent hang the same way `ido4dev:code-analyzer` did, or does Phase 2 work? If it hangs, apply the same rewrite pattern (read agent file as template → spawn built-in subagents if needed → synthesize inline → verify). If it works, the hang was specific to code-analyzer's scope (size/complexity of the 3-repo exploration + 25-cap synthesis in one shot).

@@ -1,14 +1,19 @@
 name: Sync Marketplace
 
+# Triggered by release tags pushed by scripts/release.sh.
+# workflow_dispatch is provided as a manual escape hatch — it reads
+# the current plugin.json version and replays the sync.
 on:
   push:
-    branches: [main]
-    paths:
-      - '.claude-plugin/plugin.json'
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout ido4dev
         uses: actions/checkout@v4
@@ -20,6 +25,9 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Plugin version: $VERSION"
 
+      # MARKETPLACE_TOKEN is a PAT scoped to the ido4-plugins repo.
+      # If this step fails with HTTP 401/403, the token has likely expired —
+      # regenerate at github.com/settings/tokens and update the repo secret.
       - name: Checkout ido4-plugins marketplace
         uses: actions/checkout@v4
         with:

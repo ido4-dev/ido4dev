@@ -379,3 +379,44 @@ Run `decompose-tasks` in the same test session (continuation of Phase 1's forwar
 ```
 
 **Critical question for Phase 2:** does `ido4dev:technical-spec-writer` plugin-defined subagent hang the same way `ido4dev:code-analyzer` did, or does Phase 2 work? If it hangs, apply the same rewrite pattern (read agent file as template → spawn built-in subagents if needed → synthesize inline → verify). If it works, the hang was specific to code-analyzer's scope (size/complexity of the 3-repo exploration + 25-cap synthesis in one shot).
+
+---
+
+## Phase 2 Investigation — Hang Confirmed, Fix Applied (2026-04-11)
+
+### Phase 2 hang — same failure mode as Phase 1
+
+Ran `/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md` against the 1666-line canvas produced by the validated Phase 1 run. The Phase 2 skill initially worked correctly — loaded, validated the canvas path, verified the file exists. Then it spawned `ido4dev:technical-spec-writer` plugin-defined subagent. The subagent exhibited the same hang pattern as `code-analyzer`:
+
+- **Pace:** 5 tool uses in 3m 31s → 5 tool uses in 6m 26s. **Zero new tool uses over 3 minutes.** Token download flat at 1.8k.
+- **Re-reading symptom:** the visible tool uses show `Read(specs/ido4shape-enterprise-cloud-canvas.md)` three times in a row — same file, repeatedly read. Context-pressure symptom identical to `code-analyzer`'s re-reading of `system-architecture.md` mid-hang.
+- **Round 2 benchmark:** `technical-spec-writer` completed in 9m 5s with 22 tool uses in round 2. Round 3 should have passed the 22-tool mark by the 6-minute mark if working normally. It didn't.
+
+**Confirmed:** the plugin-defined subagent path fails for `technical-spec-writer` the same way it does for `code-analyzer`. The hypothesis "plugin-defined subagents broadly unreliable in current environment" is now confirmed across two different plugin-defined subagents.
+
+### Fix applied — Phase 2 is a pure transform, simpler than Phase 1
+
+Rewrote Stage 1 of `skills/decompose-tasks/SKILL.md` to do the work inline. No subagents at all. Phase 2 doesn't need exploration (it's canvas → technical spec, pure transform), so no Explore agents needed — simpler than Phase 1's fix.
+
+**New Stage 1 structure:**
+- **Stage 1a** — Read and validate the canvas. The spec-writer agent's Step 0 validation becomes the orchestrator's first check (per-capability sections, strategic context, cross-cutting concern detail, dependency ordering)
+- **Stage 1b** — Decompose and write the technical spec inline, following the template and rules in `agents/technical-spec-writer.md` (Goldilocks sizing, metadata grounded in canvas, shared infrastructure identification, technical capability creation, dependency graph validation, final quality check)
+- **Stage 1c** — Verify the written file (capability count + task count via grep) and present summary to user
+
+**What's preserved:**
+- `agents/technical-spec-writer.md` — file unchanged, still the authoritative template and rules reference
+- All Phase 2 guarantees: Goldilocks principle, metadata grounding, stakeholder attribution preservation, parseable output format, critical rules
+- Stage 0 and End-of-Phase-2 guidance — unchanged
+
+**Why this is even simpler than the Phase 1 fix:** Phase 1 needed parallel Explore subagents because it had to gather information from 3 separate integration target repos — parallelism gave a time win. Phase 2 has one input (the canvas) and one output (the technical spec). Main Claude can do the full transform inline without fanout.
+
+### Observations (Phase 2 addendum)
+
+- **OBS-07 (Phase 2 plugin subagent hangs like Phase 1)** — Confirmed pattern. `ido4dev:technical-spec-writer` reproduces the `code-analyzer` failure mode. Root cause still opaque at the Claude Code platform level, but the architectural workaround (do the work in main Claude or via built-in subagents) applies uniformly.
+- **Implication for Phase 3:** `ido4dev:spec-reviewer` is the next plugin-defined subagent in the pipeline. Highly likely to exhibit the same hang when Phase 3 runs. Pre-emptively, we could apply the same pattern to Phase 3 now — but we won't, because **observation-driven fixing** means we only fix what we've observed to be broken. Test Phase 3 first, fix if broken, move on.
+
+### Next steps
+
+1. ~~Commit the Phase 2 fix (SKILL.md + report update)~~ — done in commit `f022610`
+2. In the same test session (don't start fresh — Phase 1 ran cleanly and left the canvas in place), re-invoke `/ido4dev:decompose-tasks specs/ido4shape-enterprise-cloud-canvas.md`. Expected: Claude reads `agents/technical-spec-writer.md` as a template, validates the canvas in Stage 1a, synthesizes the technical spec inline in Stage 1b, verifies in Stage 1c, ends with the forward-pointing guidance.
+3. If Phase 2 completes, continue to Phase 3 (`/ido4dev:decompose-validate`).

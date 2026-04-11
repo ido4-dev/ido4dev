@@ -1,6 +1,6 @@
 {
   "name": "ido4dev-plugin",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Dependencies for the ido4dev Claude Code plugin. Installed automatically via SessionStart hook.",
   "dependencies": {

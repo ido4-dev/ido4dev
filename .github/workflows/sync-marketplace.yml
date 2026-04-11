@@ -16,7 +16,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout ido4dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read version from plugin.json
         id: version
@@ -29,7 +29,7 @@ jobs:
       # If this step fails with HTTP 401/403, the token has likely expired —
       # regenerate at github.com/settings/tokens and update the repo secret.
       - name: Checkout ido4-plugins marketplace
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ido4-dev/ido4-plugins
           token: ${{ secrets.MARKETPLACE_TOKEN }}

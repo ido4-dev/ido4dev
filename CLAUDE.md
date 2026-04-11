@@ -60,6 +60,8 @@ This bumps the version in `.claude-plugin/plugin.json` and syncs to the `ido4-de
 
 When monitoring a live ido4dev session (any skill — decompose, plan-wave, standup, etc.), follow this protocol.
 
+**Before starting a new test round, read the most recent report in `reports/e2e-00N-*.md`.** Each round's report contains the current state of observations, known platform quirks (subagent execution patterns, skill-discovery inconsistencies, session bloat concerns), and the iteration pattern that emerged from prior rounds. Start there — it's the source of truth for round-to-round continuity.
+
 ### Setup
 
 Two sessions run in parallel:

@@ -36,7 +36,7 @@ try {
   registerFn = mcp.registerTools ?? mcp.default?.registerTools;
 
   // The MCP package exports a createServer or similar. Let's find the tool registration.
-  // Actually, the server.test.ts in ido4-MCP shows the pattern:
+  // Actually, the server.test.ts in ido4 shows the pattern:
   // It creates a McpServer and calls registerSandboxTools, registerTaskTools, etc.
   // But the public API just exports the main entry point.
   // Let's use a different approach: import the server creation and introspect.

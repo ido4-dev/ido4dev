@@ -23,6 +23,16 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Verify version coherence
+        run: |
+          PKG=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          PLUGIN=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          if [ "$PKG" != "$PLUGIN" ]; then
+            echo "ERROR: package.json version ($PKG) does not match plugin.json version ($PLUGIN)"
+            exit 1
+          fi
+          echo "Versions coherent: $PKG"
+
       - name: Run plugin validation suite
         run: bash tests/validate-plugin.sh
 

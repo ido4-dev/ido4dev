@@ -55,7 +55,18 @@ claude --plugin-dir /path/to/this/repo
 bash scripts/release.sh --dry-run [patch|minor|major] "Release message"  # pre-flight only
 bash scripts/release.sh [patch|minor|major] "Release message"            # real release
 ```
-The script runs Layer 1 pre-flight checks (branch, clean tree, remote sync, validation suite, MCP compatibility, version coherence), then bumps version in both `package.json` and `.claude-plugin/plugin.json`, commits, tags, and pushes. Marketplace sync and GitHub release creation happen automatically via CI (`sync-marketplace.yml` gated on `workflow_run`).
+The script runs Layer 1 pre-flight checks (branch, clean tree, remote sync, validation suite, MCP compatibility, version coherence), then bumps version in both `package.json` and `.claude-plugin/plugin.json`, commits, tags, and pushes. Marketplace sync and GitHub release creation happen automatically via CI (`sync-marketplace.yml` gated on `workflow_run`). Use `--yes` flag for non-interactive agent/CI use: `bash scripts/release.sh --yes patch "message"`.
+
+## ido4 Suite Coordination
+
+This repo is part of the ido4 suite. Cross-repo release patterns, audit tooling, and coordination docs live in `~/dev-projects/ido4-suite/`:
+
+- `release-architecture.md` — the canonical 4-layer release pattern this repo follows
+- `scripts/audit-suite.sh` — verifies all repos against the pattern. Run after any release/CI changes: `bash ~/dev-projects/ido4-suite/scripts/audit-suite.sh`
+- `PLAN.md` — master plan tracking in-progress cross-repo work
+- `suite.yml` — machine-readable suite manifest
+
+Before changing release scripts, CI workflows, or cross-repo dispatch: read `release-architecture.md` first. After changes: run the audit script.
 
 ## E2E Testing Protocol
 

@@ -53,7 +53,7 @@ jobs:
           node-version: '20'
 
       - name: Install MCP server dependency
-        run: npm install
+        run: npm ci
 
       - name: Run compatibility test
         run: node tests/compatibility.mjs

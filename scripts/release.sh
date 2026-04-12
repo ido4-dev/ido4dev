@@ -128,7 +128,7 @@ if ! bash "$REPO_ROOT/tests/validate-plugin.sh" > "$VALIDATE_LOG" 2>&1; then
   echo "Full log: $VALIDATE_LOG"
   exit 1
 fi
-PASS_COUNT=$(grep -c "PASS:" "$VALIDATE_LOG" 2>/dev/null || echo "0")
+PASS_COUNT=$(grep -c "✓" "$VALIDATE_LOG" 2>/dev/null) || PASS_COUNT=0
 rm -f "$VALIDATE_LOG"
 echo "Pre-flight: plugin validation ✓ ($PASS_COUNT checks passed)"
 

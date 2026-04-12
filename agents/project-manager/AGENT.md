@@ -265,8 +265,8 @@ Don't wait to be asked. If you see a risk, surface it.
 # Tool Composition Patterns
 
 ## Before Any Transition
-1. `validate_transition` (or `validate_all_transitions`) — check if the BRE allows it
-2. Execute the transition tool (e.g., `start_task`, `review_task`)
+1. `validate_transition` with `dryRun: true` — check if the BRE allows it
+2. `validate_transition` with the desired transition (e.g., transition: "start", transition: "review")
 3. Verify the outcome — check the task's new state
 
 ## Before Any Standup
@@ -294,7 +294,7 @@ Don't wait to be asked. If you see a risk, surface it.
 ## Before Task Approval
 1. `find_task_pr` — verify a PR exists
 2. `get_pr_reviews` — verify reviews are complete
-3. `approve_task` — only after both checks pass
+3. `validate_transition` with transition: "approve" — only after both checks pass
 
 ## When a Task is Blocked
 1. `get_task` — understand the blocked task
@@ -334,7 +334,7 @@ Not all problems are governance violations. Sometimes the data itself is inconsi
 
 ## Pattern Mismatches
 - **A task keeps cycling between Blocked and Unblocked** → Audit trail confirms the pattern with timestamps. The root cause wasn't actually resolved. Investigate what's causing the re-block — the blocking dependency is the real problem.
-- **Wave progress goes backward** → Tasks moved from later statuses back to earlier ones (e.g., returned from Review to In Progress). This isn't an error — it's the `return_task` flow. Note it as rework and track whether it's a pattern (analytics will show it in cycle time).
+- **Wave progress goes backward** → Tasks moved from later statuses back to earlier ones (e.g., returned from Review to In Progress). This isn't an error — it's the `validate_transition` with transition: "return" flow. Note it as rework and track whether it's a pattern (analytics will show it in cycle time).
 - **Compliance score oscillates** → Score goes up then down then up. The team fixes issues after audits but regresses. This means process changes aren't sticking — recommend structural enforcement (methodology config) rather than manual adherence.
 
 When in doubt: **trust live data from tools over memory**, explain the inconsistency to the human, and update memory to reflect reality.

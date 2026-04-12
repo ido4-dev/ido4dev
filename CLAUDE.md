@@ -52,9 +52,10 @@ claude --plugin-dir /path/to/this/repo
 
 ### Release
 ```bash
-bash scripts/release.sh [patch|minor|major] "Release message"
+bash scripts/release.sh --dry-run [patch|minor|major] "Release message"  # pre-flight only
+bash scripts/release.sh [patch|minor|major] "Release message"            # real release
 ```
-This bumps the version in `.claude-plugin/plugin.json` and syncs to the `ido4-dev/ido4-plugins` marketplace.
+The script runs Layer 1 pre-flight checks (branch, clean tree, remote sync, validation suite, MCP compatibility, version coherence), then bumps version in both `package.json` and `.claude-plugin/plugin.json`, commits, tags, and pushes. Marketplace sync and GitHub release creation happen automatically via CI (`sync-marketplace.yml` gated on `workflow_run`).
 
 ## E2E Testing Protocol
 

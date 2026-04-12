@@ -1,14 +1,25 @@
 #!/bin/bash
 # Release script for ido4dev plugin.
-# Usage: bash scripts/release.sh [patch|minor|major] "Release message"
+# Usage: bash scripts/release.sh [--dry-run] [patch|minor|major] "Release message"
+#
+# --dry-run: runs all Layer 1 pre-flight checks without bumping, committing, or pushing.
 #
 # Layer 1 pre-flight runs before any push. Layer 2 bumps, commits, tags, pushes.
 # Marketplace sync and GitHub release happen automatically via sync-marketplace.yml.
 
 set -euo pipefail
 
-BUMP_TYPE="${1:-patch}"
-MESSAGE="${2:-Release}"
+DRY_RUN=false
+args=()
+for arg in "$@"; do
+  if [ "$arg" = "--dry-run" ]; then
+    DRY_RUN=true
+  else
+    args+=("$arg")
+  fi
+done
+BUMP_TYPE="${args[0]:-patch}"
+MESSAGE="${args[1]:-Release}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -139,6 +150,20 @@ echo ""
 # ═══════════════════════════════════════════════════════════
 # Layer 2 — Version bump, commit, tag, push
 # ═══════════════════════════════════════════════════════════
+
+if [ "$DRY_RUN" = true ]; then
+  CURRENT_VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+  echo "==========================================="
+  echo "DRY RUN — pre-flight passed"
+  echo "==========================================="
+  echo "Current version: $CURRENT_VERSION"
+  echo "Bump type: $BUMP_TYPE"
+  echo "Message: $MESSAGE"
+  echo ""
+  echo "To release for real:"
+  echo "  bash scripts/release.sh ${BUMP_TYPE} \"${MESSAGE}\""
+  exit 0
+fi
 
 # Read current version
 CURRENT_VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")

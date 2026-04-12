@@ -71,12 +71,15 @@ jobs:
           git push
 
       - name: Create GitHub Release
-        if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="v${{ steps.version.outputs.version }}"
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            --generate-notes \
-            --latest
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists — skipping"
+          else
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --generate-notes \
+              --latest
+          fi

@@ -1,27 +1,33 @@
 name: Sync Marketplace
 
-# Triggered by release tags pushed by scripts/release.sh.
-# workflow_dispatch is provided as a manual escape hatch — it reads
-# the current plugin.json version and replays the sync.
+# Gated on CI passing — never publishes a commit that failed validation.
+# Sync is idempotent (skips if marketplace already matches), so it's safe
+# to fire on every successful CI run, not just version-changing pushes.
+# workflow_dispatch is provided as a manual escape hatch.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Validate Plugin"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
     steps:
-      - name: Checkout ido4dev
+      - name: Checkout ido4dev (the SHA CI validated)
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          path: source
 
       - name: Read version from plugin.json
         id: version
         run: |
-          VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          VERSION=$(python3 -c "import json; print(json.load(open('source/.claude-plugin/plugin.json'))['version'])")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Plugin version: $VERSION"
 
@@ -71,6 +77,7 @@ jobs:
           git push
 
       - name: Create GitHub Release
+        working-directory: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

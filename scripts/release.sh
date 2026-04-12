@@ -213,7 +213,7 @@ fi
 echo "Version coherence: $PKG_VER ✓"
 
 # Commit to ido4dev repo
-git add -A
+git add .claude-plugin/plugin.json package.json
 git commit -m "release v$NEW_VERSION — $MESSAGE"
 git tag "v$NEW_VERSION"
 git push origin main --tags

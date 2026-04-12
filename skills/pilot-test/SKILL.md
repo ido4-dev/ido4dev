@@ -10,7 +10,7 @@ You are running a structured end-to-end verification of the ido4 governance plat
 **Tone**: Test engineer — methodical, precise, reporting results not narrative. Every check has a pass/fail outcome.
 
 ## Communication
-- When calling ido4 tools, briefly state what is being TESTED — "Testing BRE rejection: starting a blocked task should fail..." — not "Let me call start_task."
+- When calling ido4 tools, briefly state what is being TESTED — "Testing BRE rejection: starting a blocked task should fail..." — not "Let me call validate_transition."
 - Do NOT narrate internal setup steps (reading config, discovering issue numbers). Just do them silently.
 - Report RESULTS (pass/fail with evidence), not process. The phase report format IS the output.
 
@@ -61,20 +61,20 @@ Record each issue number for use in subsequent calls.
 
 Execute each transition and record success/failure:
 
-1. `start_task` on T11 (OAuth integration) → expect READY_FOR_DEV → IN_PROGRESS
-2. `start_task` on T13 (Data export service) → expect READY_FOR_DEV → IN_PROGRESS
-3. `review_task` on T13 → expect IN_PROGRESS → IN_REVIEW
-4. `block_task` on T11 with message "Waiting on API spec from ETL task" → expect IN_PROGRESS → BLOCKED
-5. `unblock_task` on T11 → expect BLOCKED → IN_PROGRESS (this generates blocking time data for analytics)
-6. `ready_task` on T14 (Batch processing) → expect IN_REFINEMENT → READY_FOR_DEV
+1. `validate_transition` with transition: "start" on T11 (OAuth integration) → expect READY_FOR_DEV → IN_PROGRESS
+2. `validate_transition` with transition: "start" on T13 (Data export service) → expect READY_FOR_DEV → IN_PROGRESS
+3. `validate_transition` with transition: "review" on T13 → expect IN_PROGRESS → IN_REVIEW
+4. `validate_transition` with transition: "block" on T11 with message "Waiting on API spec from ETL task" → expect IN_PROGRESS → BLOCKED
+5. `validate_transition` with transition: "unblock" on T11 → expect BLOCKED → IN_PROGRESS (this generates blocking time data for analytics)
+6. `validate_transition` with transition: "ready" on T14 (Batch processing) → expect IN_REFINEMENT → READY_FOR_DEV
 
 ### 2B: Invalid Transitions (expect 3 BRE rejections)
 
 These SHOULD fail — the BRE must block them:
 
-7. `start_task` on T8 (Data validation layer) → expect REJECTION: task is BLOCKED, can't start
-8. `start_task` on T9 (API rate limiting) → expect REJECTION: task is BLOCKED, can't start
-9. `approve_task` on T10 (Auth token service) → expect REJECTION or validation warnings: IN_REVIEW but no PR exists
+7. `validate_transition` with transition: "start" on T8 (Data validation layer) → expect REJECTION: task is BLOCKED, can't start
+8. `validate_transition` with transition: "start" on T9 (API rate limiting) → expect REJECTION: task is BLOCKED, can't start
+9. `validate_transition` with transition: "approve" on T10 (Auth token service) → expect REJECTION or validation warnings: IN_REVIEW but no PR exists
 
 For each rejection, verify the response includes validation errors explaining WHY the transition was blocked.
 
@@ -104,7 +104,7 @@ Now verify that Phase 4 services contain real data from the operations in Phase 
 ### 3A: Audit Trail
 
 1. `query_audit_trail` with no filters → count total events, verify > 0
-2. `query_audit_trail` with `transition: "start"` → verify returns the start_task events from Phase 2
+2. `query_audit_trail` with `transition: "start"` → verify returns the start transition events from Phase 2
 3. `get_audit_summary` → verify it returns grouped event counts (by actor, by transition type)
 
 **Checks**:

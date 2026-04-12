@@ -156,7 +156,7 @@ This is the "aha moment." The user watches governance BLOCK an invalid action, t
 
 Find a task that's BLOCKED (from the standup data). Try to start it:
 
-Call `start_task` with `dryRun: true` on the blocked task.
+Call `validate_transition` with transition: "start" and `dryRun: true` on the blocked task.
 
 Present the result: "I just tried to start [task title]. The BRE blocked it:
 

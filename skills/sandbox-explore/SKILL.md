@@ -74,9 +74,9 @@ When the user picks a number:
 4. Call `get_board_data`, present the board with flow intelligence annotations.
 
 ### Options 5-7 (Governance Enforcement)
-5. Find a BLOCKED task from the board. Call `start_task` with `dryRun: true`. Present the BRE response — which step failed, why, and the remediation.
+5. Find a BLOCKED task from the board. Call `validate_transition` with transition: "start" and `dryRun: true`. Present the BRE response — which step failed, why, and the remediation.
 6. Find a task and attempt an invalid container assignment. Present the integrity check result.
-7. Find the FALSE_STATUS task (in review with no PR). Present the correction needed. If the user wants to fix it, guide them through the `return_task` transition.
+7. Find the FALSE_STATUS task (in review with no PR). Present the correction needed. If the user wants to fix it, guide them through `validate_transition` with transition: "return".
 
 ### Options 8-10 (Multi-Agent Coordination)
 8. Call `list_agents`. Present agent registrations, capabilities, task locks, heartbeat status.

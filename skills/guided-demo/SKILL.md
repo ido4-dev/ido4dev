@@ -94,7 +94,7 @@ Present: "The project's governance health score is [X]/100. The biggest drags ar
 
 Pick a blocked task. Try to start it with `dryRun: true`:
 
-Call `start_task` (or the equivalent transition tool) with `dryRun: true`.
+Call `validate_transition` with transition: "start" and `dryRun: true`.
 
 Present the BRE response:
 "I tried to start [task title]. The Business Rule Engine blocked it:
@@ -109,7 +109,7 @@ That's 32 validation steps running as TypeScript code. Not AI reasoning — dete
 
 If there's a task in ready state with all dependencies met, show that the BRE ALLOWS valid transitions:
 
-Call `start_task` with `dryRun: true` on a valid task.
+Call `validate_transition` with transition: "start" and `dryRun: true` on a valid task.
 
 "This one passes all 32 validation steps. Governance enables agents that follow the process — it doesn't slow them down."
 

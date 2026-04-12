@@ -139,9 +139,6 @@ if (fs.existsSync(skillDir)) {
 console.log(`  Found ${referencedTools.size} tool references in skills`);
 
 // Critical tools that skills depend on.
-// NOTE: 4 skills (guided-demo, pilot-test, sandbox-explore, onboard) reference
-// start_task which no longer exists in @ido4/mcp — needs investigation in a
-// separate session. Removed from this list so the test asserts reality.
 const criticalTools = [
   'create_sandbox',
   'destroy_sandbox',
@@ -151,6 +148,7 @@ const criticalTools = [
   'get_compliance_data',
   'get_board_data',
   'get_next_task',
+  'validate_transition',
   'list_agents',
   'find_task_pr',
   'get_pr_reviews',

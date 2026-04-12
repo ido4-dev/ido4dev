@@ -14,7 +14,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__plugin_ido4dev_ido4__(start_task|review_task|approve_task|block_task|unblock_task|return_task|refine_task|ready_task)",
+        "matcher": "mcp__plugin_ido4dev_ido4__validate_transition",
         "hooks": [
           {
             "type": "prompt",

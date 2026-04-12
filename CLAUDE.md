@@ -61,7 +61,7 @@ The script runs Layer 1 pre-flight checks (branch, clean tree, remote sync, vali
 
 This repo is part of the ido4 suite. Cross-repo release patterns, audit tooling, and coordination docs live in `~/dev-projects/ido4-suite/`:
 
-- `release-architecture.md` — the canonical 4-layer release pattern this repo follows
+- `docs/release-architecture.md` — the canonical 4-layer release pattern this repo follows
 - `scripts/audit-suite.sh` — verifies all repos against the pattern. Run after any release/CI changes: `bash ~/dev-projects/ido4-suite/scripts/audit-suite.sh`
 - `PLAN.md` — master plan tracking in-progress cross-repo work
 - `suite.yml` — machine-readable suite manifest

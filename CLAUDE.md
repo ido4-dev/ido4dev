@@ -22,6 +22,26 @@ ido4dev (this plugin)
   └── Domain logic: BRE, profiles, services, repositories
 ```
 
+## Active Extraction (in progress)
+
+The decomposition slice of this plugin is being extracted into a new standalone companion plugin, `ido4specs`, so engineers can author technical specs without installing the full governance platform. The pipeline becomes `ido4shape → ido4specs → ido4dev:ingest-spec → GitHub issues`, and `ido4dev` slims to a governance-only plugin once the extraction completes.
+
+**Status as of 2026-04-14:**
+- **Phase 1** (extracting `@ido4/tech-spec-format` from `@ido4/core`) — complete in the `ido4` monorepo
+- **Phase 2** (creating the `ido4specs` plugin scaffold) — complete on local main of `~/dev-projects/ido4specs/`, head `b8be1ab`, not yet pushed
+- **Phase 3** (slimming this repo) — **next workstream, now unblocked**. Will delete `skills/decompose/`, `skills/decompose-tasks/`, `agents/code-analyzer.md`, `agents/technical-spec-writer.md`, `agents/spec-reviewer.md`, and rename/slim `skills/decompose-validate/` → `skills/ingest-spec/` (Stages 2+3 only — Stage 1 spec-reviewer move is already in ido4specs). Keep all governance skills, `.mcp.json`, and the `@ido4/mcp` install hook.
+- **Phases 4–5** (suite integration + release coordination) — pending
+
+The architecture diagram and skill/agent counts above will be updated **as part of Phase 3 itself** — they're accurate today (the decompose skills and agents still live here) and become stale only after Phase 3 deletes them.
+
+**Where to start a Phase 3 session:**
+1. Read `~/dev-projects/ido4specs/docs/phase-2-completion-record.md` for architectural context and the deferred-items table
+2. Read `~/dev-projects/ido4specs/docs/extraction-plan.md` §8 for the per-file delete/slim/keep/update/verify list
+3. Check `~/dev-projects/ido4-suite/PLAN.md` Phase 9.3 for per-sub-phase checkbox state
+4. Session memory `project_ido4specs_extraction.md` in this repo's pool has the same context as a quick-load pointer
+
+The slim is reversible until released. ido4specs has zero runtime dependency on ido4dev — reverting Phase 3's commit leaves both plugins in working states.
+
 ## MCP Server Dependency
 
 The plugin doesn't bundle the MCP server. On first session start, a `SessionStart` hook installs `@ido4/mcp` from npm to `${CLAUDE_PLUGIN_DATA}/`. The `.mcp.json` references the installed binary. This means:
@@ -56,6 +76,10 @@ bash scripts/release.sh --dry-run [patch|minor|major] "Release message"  # pre-f
 bash scripts/release.sh [patch|minor|major] "Release message"            # real release
 ```
 The script runs Layer 1 pre-flight checks (branch, clean tree, remote sync, validation suite, MCP compatibility, version coherence), then bumps version in both `package.json` and `.claude-plugin/plugin.json`, commits, tags, and pushes. Marketplace sync and GitHub release creation happen automatically via CI (`sync-marketplace.yml` gated on `workflow_run`). Use `--yes` flag for non-interactive agent/CI use: `bash scripts/release.sh --yes patch "message"`.
+
+### Working style
+
+Make the call. Reserve (a)/(b)/(c) for genuinely different paths, not flavors of a recommendation already made. A short answer the user can redirect beats a long one that preempts every objection.
 
 ## ido4 Suite Coordination
 

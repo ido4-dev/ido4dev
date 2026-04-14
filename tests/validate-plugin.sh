@@ -62,7 +62,7 @@ done
 echo ""
 echo "▸ Skills"
 
-EXPECTED_SKILLS="standup board health compliance onboard guided-demo sandbox-explore sandbox plan-wave plan-sprint plan-cycle retro-wave retro-sprint retro-cycle decompose spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up"
+EXPECTED_SKILLS="standup board health compliance onboard guided-demo sandbox-explore sandbox plan-wave plan-sprint plan-cycle retro-wave retro-sprint retro-cycle ingest-spec spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up"
 
 for SKILL in $EXPECTED_SKILLS; do
   SKILL_FILE="skills/$SKILL/SKILL.md"
@@ -119,7 +119,7 @@ fi
 echo ""
 echo "▸ Agents"
 
-EXPECTED_AGENTS="agents/code-analyzer.md agents/spec-reviewer.md agents/technical-spec-writer.md agents/project-manager/AGENT.md"
+EXPECTED_AGENTS="agents/project-manager/AGENT.md"
 
 for AGENT in $EXPECTED_AGENTS; do
   if [ -f "$AGENT" ]; then
@@ -184,7 +184,7 @@ for REF in $SKILL_REFS; do
   if [ ! -d "skills/$REF" ] && [ ! -f "commands/$REF.md" ]; then
     # Some refs are to tools (init, board) that may not be skills
     # Only fail on clear skill refs
-    if echo "$REF" | grep -qE "standup|board|health|compliance|onboard|guided-demo|sandbox|decompose|plan-|retro-"; then
+    if echo "$REF" | grep -qE "standup|board|health|compliance|onboard|guided-demo|sandbox|ingest-spec|plan-|retro-"; then
       [ -d "skills/$REF" ] || [ -f "commands/$REF.md" ] || MISSING_REFS=$((MISSING_REFS + 1))
     fi
   fi

@@ -2,14 +2,18 @@
 
 ## What This Is
 
-The Claude Code plugin for ido4 — the AI-hybrid development platform. This repo contains skills, agents, hooks, and configuration that orchestrate the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server into intelligent development workflows.
+The governance plugin for ido4 — methodology-aware orchestration, quality gates, compliance, and planning on top of an initialized ido4 project. Authoring technical specs is handled by the companion plugin `ido4specs` (install alongside `ido4dev` to run the full pipeline).
 
 ## Architecture
 
 ```
+ido4specs (companion plugin, upstream)
+  └── create-spec → synthesize-spec → review-spec → validate-spec
+        │
+        ▼ (hand off *-tech-spec.md)
 ido4dev (this plugin)
-  ├── Skills (23)     — Governance workflows (standup, planning, sandbox, etc.)
-  ├── Agents (4)      — PM, code-analyzer, technical-spec-writer, spec-reviewer
+  ├── Skills (21)     — Governance workflows (standup, planning, sandbox, ingest-spec, etc.)
+  ├── Agents (1)      — project-manager (PM)
   ├── Hooks (2 types) — SessionStart (MCP server install), PostToolUse (governance signals)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}
 
@@ -22,25 +26,24 @@ ido4dev (this plugin)
   └── Domain logic: BRE, profiles, services, repositories
 ```
 
-## Active Extraction (in progress)
+## ido4specs Extraction — Status
 
-The decomposition slice of this plugin is being extracted into a new standalone companion plugin, `ido4specs`, so engineers can author technical specs without installing the full governance platform. The pipeline becomes `ido4shape → ido4specs → ido4dev:ingest-spec → GitHub issues`, and `ido4dev` slims to a governance-only plugin once the extraction completes.
+The decomposition / authoring slice of this plugin was extracted into a standalone companion plugin, `ido4specs`, so engineers can author technical specs as an upstream step feeding into this plugin's governance flow. The production pipeline is now `ido4shape → ido4specs → ido4dev:ingest-spec → GitHub issues under the project's methodology`.
 
 **Status as of 2026-04-14:**
 - **Phase 1** (extracting `@ido4/tech-spec-format` from `@ido4/core`) — complete in the `ido4` monorepo
 - **Phase 2** (creating the `ido4specs` plugin scaffold) — complete on local main of `~/dev-projects/ido4specs/`, head `b8be1ab`, not yet pushed
-- **Phase 3** (slimming this repo) — **next workstream, now unblocked**. Will delete `skills/decompose/`, `skills/decompose-tasks/`, `agents/code-analyzer.md`, `agents/technical-spec-writer.md`, `agents/spec-reviewer.md`, and rename/slim `skills/decompose-validate/` → `skills/ingest-spec/` (Stages 2+3 only — Stage 1 spec-reviewer move is already in ido4specs). Keep all governance skills, `.mcp.json`, and the `@ido4/mcp` install hook.
-- **Phases 4–5** (suite integration + release coordination) — pending
+- **Phase 3** (slimming this repo) — **complete**. Deleted `skills/decompose/`, `skills/decompose-tasks/`, `agents/code-analyzer.md`, `agents/technical-spec-writer.md`, `agents/spec-reviewer.md`; renamed and slimmed `skills/decompose-validate/` → `skills/ingest-spec/` (dry-run preview + ingest on approval; reviewer stage moved to `ido4specs:review-spec`); relocated `docs/ingestion-enforcement.md` to `ido4specs/docs/`.
+- **Phase 4** (suite integration: `interface-contracts.md` contract #6, `cross-repo-connections.md`, `suite.yml` tier-1 entry) — pending
+- **Phase 5** (release coordination: `@ido4/tech-spec-format` to npm, `ido4specs` v0.1.0 marketplace entry, slimmed `ido4dev` v0.8.0) — pending
 
-The architecture diagram and skill/agent counts above will be updated **as part of Phase 3 itself** — they're accurate today (the decompose skills and agents still live here) and become stale only after Phase 3 deletes them.
+**Where to find the rest of the extraction state:**
+1. `~/dev-projects/ido4specs/docs/extraction-plan.md` — canonical plan for all five phases
+2. `~/dev-projects/ido4specs/docs/phase-2-completion-record.md` — Phase 2 architectural record and deferred-items table
+3. `~/dev-projects/ido4-suite/PLAN.md` Phase 9.3–9.5 — per-sub-phase checkbox state
+4. Session memory `project_ido4specs_extraction.md` in this repo's pool — quick-load pointer
 
-**Where to start a Phase 3 session:**
-1. Read `~/dev-projects/ido4specs/docs/phase-2-completion-record.md` for architectural context and the deferred-items table
-2. Read `~/dev-projects/ido4specs/docs/extraction-plan.md` §8 for the per-file delete/slim/keep/update/verify list
-3. Check `~/dev-projects/ido4-suite/PLAN.md` Phase 9.3 for per-sub-phase checkbox state
-4. Session memory `project_ido4specs_extraction.md` in this repo's pool has the same context as a quick-load pointer
-
-The slim is reversible until released. ido4specs has zero runtime dependency on ido4dev — reverting Phase 3's commit leaves both plugins in working states.
+Phase 3 is reversible by reverting its commits. `ido4specs` has zero runtime dependency on this plugin; both can exist independently.
 
 ## MCP Server Dependency
 
@@ -96,7 +99,7 @@ Before writing or auditing skills, agents, or prompts: read `docs/prompt-strateg
 
 ## E2E Testing Protocol
 
-When monitoring a live ido4dev session (any skill — decompose, plan-wave, standup, etc.), follow this protocol.
+When monitoring a live ido4dev session (any skill — standup, plan-wave, ingest-spec, sandbox-explore, etc.), follow this protocol.
 
 **Before starting a new test round, read the most recent report in `reports/e2e-00N-*.md`.** Each round's report contains the current state of observations, known platform quirks (subagent execution patterns, skill-discovery inconsistencies, session bloat concerns), and the iteration pattern that emerged from prior rounds. Start there — it's the source of truth for round-to-round continuity.
 

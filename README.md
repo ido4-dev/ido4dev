@@ -12,7 +12,7 @@ ido4dev gives AI coding agents the understanding to build correctly:
 - **Multi-agent coordination** — work distribution, task locking, handoff protocols
 - **Methodology support** — Hydro (wave-based), Scrum (sprint-based), Shape Up (cycle-based). The engine is code; methodologies are profiles.
 
-23 skills, 4 agents, 2 governance hooks. Built on the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server.
+21 skills, 1 agent (project-manager), 2 governance hooks. Built on the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
 
 ## Installation
 
@@ -46,15 +46,16 @@ The onboarding skill auto-clones a [demo codebase](https://github.com/ido4-dev/i
 | **Project Intelligence** | `/ido4dev:standup`, `/ido4dev:board`, `/ido4dev:health`, `/ido4dev:compliance` |
 | **Planning** | `/ido4dev:plan-wave`, `/ido4dev:plan-sprint`, `/ido4dev:plan-cycle` |
 | **Retrospectives** | `/ido4dev:retro-wave`, `/ido4dev:retro-sprint`, `/ido4dev:retro-cycle` |
-| **Specification** | `/ido4dev:decompose`, `/ido4dev:decompose-tasks`, `/ido4dev:decompose-validate`, `/ido4dev:spec-validate`, `/ido4dev:spec-quality` |
+| **Spec Ingestion** | `/ido4dev:ingest-spec` (authoring lives upstream in `ido4specs`), `/ido4dev:spec-validate`, `/ido4dev:spec-quality` |
 | **Sandbox** | `/ido4dev:sandbox`, `/ido4dev:pilot-test` |
 
 ## Part of the ido4 Suite
 
 - **[ido4shape](https://github.com/ido4-dev/ido4shape)** — Creative specification through conversation. Shapes what to build.
-- **ido4dev** (this plugin) — Specs-driven development at scale. Governs how it's built.
+- **ido4specs** — Technical specification authoring. Takes a strategic spec + codebase and produces an ingestion-ready technical spec (`*-tech-spec.md`). Upstream of `ido4dev`.
+- **ido4dev** (this plugin) — Governance for AI-hybrid development. Ingests technical specs into methodology-shaped GitHub issues, then runs compliance, standups, planning, and retrospectives on them.
 
-Both available from the same marketplace: `/plugin marketplace add ido4-dev/ido4-plugins`
+All available from the same marketplace: `/plugin marketplace add ido4-dev/ido4-plugins`
 
 ## Links
 

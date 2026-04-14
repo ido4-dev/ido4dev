@@ -2,7 +2,7 @@
   "name": "ido4dev-plugin",
   "version": "0.7.1",
   "private": true,
-  "description": "Dependencies for the ido4dev Claude Code plugin. Installed automatically via SessionStart hook.",
+  "description": "Dependencies for the ido4dev governance plugin. Installed automatically via SessionStart hook.",
   "dependencies": {
     "@ido4/mcp": "^0.7.1"
   }

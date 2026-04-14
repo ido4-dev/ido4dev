@@ -188,7 +188,9 @@ Present clearly:
 - `/ido4dev:sandbox-explore` — Interactive sandbox exploration (try breaking rules, fixing violations)
 - `/ido4dev:standup` — Run a governance standup briefing
 - `/ido4dev:compliance` — Deep dive into compliance scoring
-- `/ido4dev:init` — Initialize ido4 on your own project
+- `/ido4dev:ingest-spec` — Ingest a pre-authored technical spec into your project's methodology
+
+**To author technical specs** (so you have one to ingest on your real project), install the companion plugin `ido4specs` from the same marketplace. Pipeline: `/ido4shape:*` (strategic spec) → `/ido4specs:create-spec` → `/ido4specs:synthesize-spec` → `/ido4specs:validate-spec` → `/ido4dev:ingest-spec`.
 
 The sandbox stays active until you destroy it (`/ido4dev:sandbox cleanup`). Explore freely."
 

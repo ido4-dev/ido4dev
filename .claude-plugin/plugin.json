@@ -1,6 +1,6 @@
 {
   "name": "ido4dev",
-  "description": "The platform that makes AI-hybrid software development work at scale \u2014 specs-driven, methodology-aware, with full project context for every AI coding session.",
+  "description": "Governance plugin for ido4 \u2014 ingests technical specs into methodology-shaped GitHub issues and runs compliance, standups, planning, and retrospectives on top. Pair with ido4specs for technical-spec authoring.",
   "version": "0.7.1",
   "author": {
     "name": "Bogdan Coman",

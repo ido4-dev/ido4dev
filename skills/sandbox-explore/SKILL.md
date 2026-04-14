@@ -58,8 +58,8 @@ Adapt the options to the methodology. Present all that apply:
 11. **Circuit breaker status** — How many days until the cycle ends? Which bets are on track?
 12. **Hill chart analysis** — Which bets are over the hill (downhill, shipping) vs. stuck uphill?
 
-### Full Pipeline (if demo codebase available)
-13. **Decompose the strategic spec (3 phases)** — Walk the full decomposition pipeline against the demo codebase: `/ido4dev:decompose` (canvas) → `/ido4dev:decompose-tasks` (technical spec) → `/ido4dev:decompose-validate` (review + dry-run). Each phase stops at a review-worthy artifact.
+### Full Pipeline (if demo codebase available AND ido4specs installed)
+13. **Author and ingest a technical spec (5 phases)** — Walk the full authoring + ingestion pipeline against the demo codebase. Authoring happens in the `ido4specs` companion plugin; ingestion happens here: `/ido4specs:create-spec` (technical canvas) → `/ido4specs:synthesize-spec` (technical spec) → `/ido4specs:review-spec` (qualitative review) → `/ido4specs:validate-spec` (structural + content validation) → `/ido4dev:ingest-spec` (dry-run preview + real ingest). Each phase stops at a review-worthy artifact. If `ido4specs` is not installed, this option reports the prerequisite and skips.
 
 ---
 
@@ -87,7 +87,7 @@ When the user picks a number:
 Execute using the methodology-appropriate tools. Use container-specific tool names (list_waves, get_sprint_status, etc.).
 
 ### Option 13 (Full Pipeline)
-Check for `~/.ido4/demo/ido4-demo/specs/notification-platform.md`. If it exists, invoke `/ido4dev:decompose` with that path.
+Check for `~/.ido4/demo/ido4-demo/specs/notification-platform.md`. Then check whether `ido4specs` is installed (glob for `~/.claude/plugins/*/ido4specs*` or check if `/ido4specs:create-spec` is a known skill). If both conditions hold, tell the user to run `/ido4specs:create-spec ~/.ido4/demo/ido4-demo/specs/notification-platform.md` to start the authoring flow; the output chain (canvas → tech spec → review → validate → ingest) walks through the five skills listed above. If `ido4specs` is not installed, report the prerequisite and suggest installing it from the marketplace (`/plugin install ido4specs@ido4-plugins`) before picking option 13.
 
 ---
 

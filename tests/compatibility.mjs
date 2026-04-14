@@ -152,7 +152,6 @@ const criticalTools = [
   'list_agents',
   'find_task_pr',
   'get_pr_reviews',
-  'parse_strategic_spec',
   'ingest_spec',
 ];
 

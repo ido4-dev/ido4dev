@@ -1,6 +1,6 @@
 {
   "name": "ido4dev-plugin",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "description": "Dependencies for the ido4dev governance plugin. Installed automatically via SessionStart hook.",
   "dependencies": {

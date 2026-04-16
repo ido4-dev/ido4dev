@@ -26,24 +26,21 @@ ido4dev (this plugin)
   └── Domain logic: BRE, profiles, services, repositories
 ```
 
-## ido4specs Extraction — Status
+## ido4specs Extraction — Complete (2026-04-15)
 
 The decomposition / authoring slice of this plugin was extracted into a standalone companion plugin, `ido4specs`, so engineers can author technical specs as an upstream step feeding into this plugin's governance flow. The production pipeline is now `ido4shape → ido4specs → ido4dev:ingest-spec → GitHub issues under the project's methodology`.
 
-**Status as of 2026-04-14:**
-- **Phase 1** (extracting `@ido4/tech-spec-format` from `@ido4/core`) — complete in the `ido4` monorepo
-- **Phase 2** (creating the `ido4specs` plugin scaffold) — complete on local main of `~/dev-projects/ido4specs/`, head `b8be1ab`, not yet pushed
-- **Phase 3** (slimming this repo) — **complete**. Deleted `skills/decompose/`, `skills/decompose-tasks/`, `agents/code-analyzer.md`, `agents/technical-spec-writer.md`, `agents/spec-reviewer.md`; renamed and slimmed `skills/decompose-validate/` → `skills/ingest-spec/` (dry-run preview + ingest on approval; reviewer stage moved to `ido4specs:review-spec`); relocated `docs/ingestion-enforcement.md` to `ido4specs/docs/`.
-- **Phase 4** (suite integration: `interface-contracts.md` contract #6, `cross-repo-connections.md`, `suite.yml` tier-1 entry) — pending
-- **Phase 5** (release coordination: `@ido4/tech-spec-format` to npm, `ido4specs` v0.1.0 marketplace entry, slimmed `ido4dev` v0.8.0) — pending
+**All five phases complete** — `ido4specs` is live on GitHub, npm (`@ido4/tech-spec-format@0.8.0`), and the `ido4-dev/ido4-plugins` marketplace at v0.1.0. This repo was slimmed to governance-only and released at `v0.8.0` on 2026-04-15. The `decompose` / `decompose-tasks` / `decompose-validate` skills and the three authoring agents (`code-analyzer`, `technical-spec-writer`, `spec-reviewer`) moved to `ido4specs`; `decompose-validate` was renamed to `ingest-spec` and slimmed to dry-run preview + ingest-on-approval. The only remaining closure is a user-driven live E2E smoke test of the full `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` chain in a fresh Claude Code session.
 
-**Where to find the rest of the extraction state:**
-1. `~/dev-projects/ido4specs/docs/extraction-plan.md` — canonical plan for all five phases
-2. `~/dev-projects/ido4specs/docs/phase-2-completion-record.md` — Phase 2 architectural record and deferred-items table
-3. `~/dev-projects/ido4-suite/PLAN.md` Phase 9.3–9.5 — per-sub-phase checkbox state
+**Where to find the extraction record:**
+1. `~/dev-projects/ido4specs/docs/extraction-plan.md` — canonical plan for all five phases, with per-phase status and completion notes
+2. `~/dev-projects/ido4specs/docs/phase-2-completion-record.md` — historical record of the Phase 2 plugin scaffold state
+3. `~/dev-projects/ido4-suite/PLAN.md` Phase 9 — per-sub-phase checkbox state and plan history
 4. Session memory `project_ido4specs_extraction.md` in this repo's pool — quick-load pointer
 
-Phase 3 is reversible by reverting its commits. `ido4specs` has zero runtime dependency on this plugin; both can exist independently.
+**Side-effect:** Phase 7 (the `@ido4/mcp` wildcard-dep bug) closed as part of Phase 9.5.1 — `ido4/scripts/release.sh` now mechanically pins internal `@ido4/*` deps to `~${VERSION}` on every bump. A fresh `npm install` in this repo post-0.8.0 pulls `@ido4/core@0.8.0` (was frozen at 0.5.0), and `tests/round3-agent-artifact.mjs` now passes 22/0 (was 19/2 failing).
+
+`ido4specs` has zero runtime dependency on this plugin; both can exist independently.
 
 ## MCP Server Dependency
 

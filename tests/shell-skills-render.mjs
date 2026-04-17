@@ -72,6 +72,14 @@ const shellSkills = [
     shapeUpMarker: 'Scope Hammering',
     minBytes: 3000,
   },
+  {
+    name: 'health',
+    ceremony: 'health',
+    hydroMarker: 'wave',
+    scrumMarker: 'Sprint Goal',
+    shapeUpMarker: 'circuit breaker',
+    minBytes: 1200,
+  },
 ];
 
 // ─── Verify each shell's SKILL.md structure is as expected ───

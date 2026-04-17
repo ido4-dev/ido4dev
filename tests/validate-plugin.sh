@@ -163,8 +163,13 @@ echo "▸ MCP Dependency"
 
 if [ -f "package.json" ]; then
   MCP_VERSION=$(python3 -c "import json; print(json.load(open('package.json')).get('dependencies',{}).get('@ido4/mcp',''))" 2>/dev/null)
-  echo "$MCP_VERSION" | grep -qE '^\^|^~' \
-    && pass "MCP version is semver range ($MCP_VERSION)" || fail "MCP version '$MCP_VERSION' is not a semver range"
+  if echo "$MCP_VERSION" | grep -qE '^\^|^~'; then
+    pass "MCP version is semver range ($MCP_VERSION)"
+  elif echo "$MCP_VERSION" | grep -q '^file:'; then
+    warn "MCP version is a file: path ($MCP_VERSION) — local dev only; MUST revert to semver range before release"
+  else
+    fail "MCP version '$MCP_VERSION' is neither a semver range nor a file: path"
+  fi
 fi
 
 if [ -f ".mcp.json" ]; then

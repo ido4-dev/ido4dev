@@ -1,6 +1,6 @@
 # Phase 2 Design Brief: WS1 Plugin Diet Execution
 
-**Status:** Draft — design updated 2026-04-17 after extensive web research. Original shell-over-MCP-Prompt design was wrong (no protocol-level delegation exists). Replacement design — **Runtime Prompt Rendering via Bash Injection** — codified in §2. Ready to execute pending user sign-off on the revised design.
+**Status:** Stage 2 partial complete — `review` + `execute-task` shells live and **verified end-to-end** in fresh Claude Code session (2026-04-17). Runtime Prompt Rendering pattern is proven in production-equivalent conditions. Stage 3 cascade (replace the 10 ceremony duplicates) ready to execute on the `phase-2.1-proof` branch.
 **Created:** 2026-04-17
 **Parent plan:** `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` §8 WS1
 **Sequencing authority:** parent plan §6 #15
@@ -24,11 +24,23 @@ This brief captures the design decisions and execution sequence for the Phase 2 
 
 ---
 
-## 2. The #1 Open Investigation — RESOLVED 2026-04-17
+## 2. The #1 Open Investigation — RESOLVED + LIVE-VERIFIED 2026-04-17
 
 **Question: How does a Claude Code plugin skill delegate to an MCP Prompt?**
 
-**Answer: it doesn't. The pattern doesn't exist at the Claude Code protocol level.** Authoritative finding from the `claude-code-guide` subagent (2026-04-17, web search against current docs):
+**Answer: it doesn't — and it doesn't need to. We don't delegate; we render. Each shell skill renders the canonical generator's output at invocation via bash injection.**
+
+The Runtime Prompt Rendering pattern was verified end-to-end in a fresh Claude Code session against all three methodology profiles. See architecture-evolution-plan.md §11 status log entry (2026-04-17 — Phase 2.1 LIVE-VERIFIED). Three confirmation signals from the live test:
+
+1. `/ido4dev:review` produced "Wave Review" framing — Hydro-specific terminology not present in the shell skill's frontmatter. Could only have come from the rendered MCP prompt generator output.
+2. `/ido4dev:review Wave-001` produced "Starting Wave-001 review" — container suffix propagation works via `--container` flag substitution into the generator's container-name interpolation.
+3. `/ido4dev:execute-task 42` produced "task #42" framing + correct call to `get_task_execution_data(issueNumber: 42)` — issue-number suffix + ceremony dispatch both correct.
+
+Original design (shell-over-MCP-Prompt protocol-level delegation) was wrong. Replacement design (Runtime Prompt Rendering via bash injection) was researched, codified, implemented, tested, and live-verified in the same day.
+
+### Original investigation finding (kept for history)
+
+The shell-over-MCP-Prompt protocol-level delegation pattern doesn't exist at the Claude Code protocol level. Authoritative finding from the `claude-code-guide` subagent (2026-04-17, web search against current docs):
 
 - No mechanism for a skill to invoke `listPrompts` / `getPrompt` on an MCP server programmatically
 - No declarative delegation in skill frontmatter (no `delegates-to-mcp-prompt` field or similar)

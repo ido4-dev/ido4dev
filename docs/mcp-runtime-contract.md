@@ -17,6 +17,28 @@ After the Phase 9 ido4specs extraction (2026-04-15), `ido4dev` is the **sole run
 
 ---
 
+## CLI surfaces (added Phase 2.1, 2026-04-17)
+
+In addition to MCP tools, the contract now also covers **CLI binaries** shipped in `@ido4/mcp`'s `package.json` `bin` field. Plugin shell skills depend on these binaries existing at the expected path under `${CLAUDE_PLUGIN_DATA}/node_modules/@ido4/mcp/dist/` after the SessionStart hook installs the package.
+
+Current CLI surface:
+
+| Bin name | Compiled path | Used by |
+|---|---|---|
+| `ido4-mcp` | `dist/index.js` | `.mcp.json` (the MCP server itself) |
+| `mcp` | `dist/index.js` | Alias for `ido4-mcp` |
+| `ido4-render-prompt` | `dist/render-prompt-cli.js` | Plugin shell skills (`/ido4dev:standup`, `/ido4dev:review`, `/ido4dev:execute-task`, etc.) via bash injection — calls `renderPrompt()` from `dist/render-prompt.js` to dispatch over methodology × ceremony and print the rendered prompt to stdout |
+
+**What counts as a breaking change for the CLI surface:**
+
+- Removing a bin entry the plugin uses
+- Renaming a bin (would break the bash-injection paths in shell skills)
+- Changing the CLI's argv interface in a way that breaks existing callers (removing required positional, renaming flags, changing exit-code semantics)
+- Changing stdout output format such that the consumer (Claude, via skill body substitution) no longer receives the expected content
+- Changing CLI dependencies to require something not present in the plugin install (e.g., a new env var the plugin doesn't set)
+
+**Verification:** `~/dev-projects/ido4dev/tests/shell-skills-render.mjs` exercises the CLI as a subprocess against fixture profiles for all three methodologies, validating output content markers, suffix propagation, and empty-`$ARGUMENTS` handling. Plus `~/dev-projects/ido4/packages/mcp/tests/render-prompt-cli.test.ts` (39 vitest unit tests covering the CLI's argument parsing).
+
 ## The criticalTools surface
 
 The contract surface is defined by the `criticalTools` allowlist in `~/dev-projects/ido4dev/tests/compatibility.mjs`. Tools on this list must exist with stable names, parameter signatures, and response shapes for `ido4dev` to function.

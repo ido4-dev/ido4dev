@@ -12,7 +12,7 @@ ido4specs (companion plugin, upstream)
         │
         ▼ (hand off *-tech-spec.md)
 ido4dev (this plugin)
-  ├── Skills (21)     — Governance workflows (standup, planning, sandbox, ingest-spec, etc.)
+  ├── Skills (~23, in flux during Phase 2 — see "Active Work" below) — Governance workflows (standup, planning, sandbox, ingest-spec, etc.) + new shells (review, execute-task)
   ├── Agents (1)      — project-manager (PM)
   ├── Hooks (2 types) — SessionStart (MCP server install), PostToolUse (governance signals)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}
@@ -41,6 +41,20 @@ The decomposition / authoring slice of this plugin was extracted into a standalo
 **Side-effect:** Phase 7 (the `@ido4/mcp` wildcard-dep bug) closed as part of Phase 9.5.1 — `ido4/scripts/release.sh` now mechanically pins internal `@ido4/*` deps to `~${VERSION}` on every bump. A fresh `npm install` in this repo post-0.8.0 pulls `@ido4/core@0.8.0` (was frozen at 0.5.0), and `tests/round3-agent-artifact.mjs` now passes 22/0 (was 19/2 failing).
 
 `ido4specs` has zero runtime dependency on this plugin; both can exist independently.
+
+## Active Work — Phase 2 Plugin Diet (in progress)
+
+The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: convert the current ~23-skill surface — most ceremony skills duplicate methodology-aware logic that already lives canonically in `@ido4/mcp`'s `PromptGenerators` — into ~8 thin shells via the **Runtime Prompt Rendering** pattern. Each shell is a one-line `` !`node ido4-render-prompt <ceremony>` `` bash injection that calls a small CLI shipped with `@ido4/mcp`; the CLI reads the active methodology profile, dispatches to the right generator, and prints the profile-aware ceremony prompt to stdout. Single source of truth (the generators), profile-aware at invocation, zero build-step sync.
+
+**State as of 2026-04-17:**
+- **Phase 1** (cleanup, planning docs) — complete
+- **Phase 2.1** (proof: `review` + `execute-task` shells + `render-prompt-cli.js` CLI in `@ido4/mcp`) — complete, **live-verified** in fresh Claude Code session against all three methodologies
+- **Phase 2 Stage 3** (cascade: replace 10 ceremony duplicates with shells) — next
+- **Phase 3** (hooks rebuild) and **Phase 4** (PM autonomy) — sequenced but not yet started
+
+**Before changing skills, agents, hooks, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` and `~/dev-projects/ido4dev/docs/phase-2-brief.md` first. Decisions are recorded in plan §6; do not re-litigate.
+
+**Doc discipline (working principle):** update `architecture-evolution-plan.md` §11 (status log) at every phase gate, after every notable achievement, after every decision lands. The plan is a living document — staleness erodes its value as the guiding driver. The same applies to `phase-2-brief.md` and any other in-progress design briefs: progress that doesn't reach the doc didn't happen as far as future sessions are concerned.
 
 ## MCP Server Dependency
 

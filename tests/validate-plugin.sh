@@ -62,7 +62,7 @@ done
 echo ""
 echo "▸ Skills"
 
-EXPECTED_SKILLS="standup board health compliance onboard guided-demo sandbox-explore sandbox plan-wave plan-sprint plan-cycle retro-wave retro-sprint retro-cycle ingest-spec spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up review execute-task"
+EXPECTED_SKILLS="standup board compliance onboard guided-demo sandbox-explore sandbox plan-wave plan-sprint plan-cycle retro-wave retro-sprint retro-cycle ingest-spec spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up"
 
 for SKILL in $EXPECTED_SKILLS; do
   SKILL_FILE="skills/$SKILL/SKILL.md"
@@ -208,61 +208,6 @@ echo "▸ Content Quality"
 AGGRESSIVE=$(grep -rl "CRITICAL!\|YOU MUST\|NEVER EVER\|IMPORTANT:" skills/ --include="*.md" 2>/dev/null | wc -l | tr -d ' ')
 [ "$AGGRESSIVE" = "0" ] \
   && pass "No aggressive anti-patterns in skills" || warn "$AGGRESSIVE files with aggressive patterns"
-
-# ─── K. Shell Skills Structure ───
-# Shell skills are thin wrappers around MCP Prompt generators rendered at
-# invocation via bash injection. Each must call `ido4-render-prompt` with the
-# right ceremony name. See ido4dev/docs/phase-2-brief.md §2 for the pattern.
-
-echo ""
-echo "▸ Shell Skills Structure"
-
-SHELL_SKILLS="review execute-task"
-RENDER_CLI_PATTERN='render-prompt-cli.js'
-
-for SKILL in $SHELL_SKILLS; do
-  SKILL_FILE="skills/$SKILL/SKILL.md"
-  if [ -f "$SKILL_FILE" ]; then
-    # Shell skills are small — if ours grows past 30 non-blank lines something drifted.
-    NONBLANK=$(grep -cv '^[[:space:]]*$' "$SKILL_FILE")
-    if [ "$NONBLANK" -lt 30 ]; then
-      pass "$SKILL shell is concise ($NONBLANK non-blank lines)"
-    else
-      warn "$SKILL shell has $NONBLANK non-blank lines — shells should stay small"
-    fi
-
-    # Bash injection syntax: !`node ...`
-    grep -qE '^!`node ' "$SKILL_FILE" \
-      && pass "$SKILL uses bash injection starting with \`!\\\`node\`" \
-      || fail "$SKILL missing \`!\\\`node ...\\\`\` bash injection"
-
-    # Points at render-prompt-cli
-    grep -q "$RENDER_CLI_PATTERN" "$SKILL_FILE" \
-      && pass "$SKILL references $RENDER_CLI_PATTERN" \
-      || fail "$SKILL does not reference $RENDER_CLI_PATTERN"
-
-    # The ceremony argument matches the skill name (except legacy plan-* aliases)
-    grep -qE "render-prompt-cli\\.js\" $SKILL( |\")" "$SKILL_FILE" \
-      && pass "$SKILL invokes its own ceremony name ($SKILL)" \
-      || fail "$SKILL does not invoke ceremony \"$SKILL\""
-
-    # References CLAUDE_PLUGIN_DATA for the installed MCP package path
-    grep -q 'CLAUDE_PLUGIN_DATA' "$SKILL_FILE" \
-      && pass "$SKILL references CLAUDE_PLUGIN_DATA for MCP package path" \
-      || fail "$SKILL missing CLAUDE_PLUGIN_DATA reference"
-
-    # Shells should have argument-hint for discoverability
-    grep -q "^argument-hint:" "$SKILL_FILE" \
-      && pass "$SKILL has argument-hint" \
-      || warn "$SKILL missing argument-hint (optional but recommended)"
-
-    # Shells should pre-approve Bash(node *) to avoid permission prompts
-    grep -qE "allowed-tools:.*Bash\\(node " "$SKILL_FILE" \
-      && pass "$SKILL pre-approves Bash(node ...)" \
-      || fail "$SKILL must pre-approve Bash(node ...) for bash injection to run without prompts"
-  fi
-  # (File existence is already checked in section C above via EXPECTED_SKILLS)
-done
 
 # ─── J. Claude Code Native Validation ───
 

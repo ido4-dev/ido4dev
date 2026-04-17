@@ -103,7 +103,7 @@ Present the BRE response:
 **Reason**: [why it failed — dependency not in terminal state, etc.]
 **Remediation**: [what to do instead]
 
-That's 32 validation steps running as TypeScript code. Not AI reasoning — deterministic rules that can't be bypassed."
+That's 34 validation steps running as TypeScript code. Not AI reasoning — deterministic rules that can't be bypassed."
 
 ### 3b: Demonstrate a Valid Action (optional, if time allows)
 
@@ -111,7 +111,7 @@ If there's a task in ready state with all dependencies met, show that the BRE AL
 
 Call `validate_transition` with transition: "start" and `dryRun: true` on a valid task.
 
-"This one passes all 32 validation steps. Governance enables agents that follow the process — it doesn't slow them down."
+"This one passes all 34 validation steps. Governance enables agents that follow the process — it doesn't slow them down."
 
 ### 3c: Show the Audit Trail
 
@@ -153,7 +153,7 @@ From stakeholder conversation to governed implementation — every task traceabl
 "That's ido4. The governance layer for AI-hybrid software development.
 
 **Explore further:**
-- `/ido4dev:explore` — Interactive sandbox exploration
+- `/ido4dev:sandbox-explore` — Interactive sandbox exploration
 - `/ido4dev:standup` — Full governance standup briefing
 - `/ido4dev:compliance` — Deep compliance analysis
-- `/ido4dev:init` — Initialize ido4 on your own project"
+- `/ido4dev:onboard` — Initialize ido4 on your own project"

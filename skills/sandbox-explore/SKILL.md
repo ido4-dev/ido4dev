@@ -35,7 +35,7 @@ Adapt the options to the methodology. Present all that apply:
 4. **View the project board** — Full task distribution with flow intelligence: cascade blockers, review bottlenecks, epic cohesion.
 
 ### Governance Enforcement
-5. **Try to break a rule** — Pick a blocked task and try to start it. Watch the BRE's 32 validation steps catch the violation.
+5. **Try to break a rule** — Pick a blocked task and try to start it. Watch the BRE's 34 validation steps catch the violation.
 6. **Try a container violation** — Attempt to move a task to a container that breaks integrity. See the specific rule that fires.
 7. **Fix a violation** — Correct a false status or reassign a container. Watch the compliance score improve.
 
@@ -96,5 +96,5 @@ Check for `~/.ido4/demo/ido4-demo/specs/notification-platform.md`. Then check wh
 "**What's next?**" and re-present the remaining options (excluding what was already explored). If the user has explored 5+ paths, suggest:
 
 "You've covered a lot of ground. When you're ready:
-- `/ido4dev:init` — Initialize ido4 on your own project
+- `/ido4dev:onboard` — Initialize ido4 on your own project
 - `/ido4dev:sandbox cleanup` — Clean up the sandbox"

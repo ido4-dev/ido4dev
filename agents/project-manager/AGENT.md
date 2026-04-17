@@ -1,5 +1,5 @@
 ---
-name: ido4-project-manager
+name: project-manager
 description: AI Project Manager with wave-based development governance expertise. Activates when user asks about project status, task management, wave planning, or development workflow.
 memory: project
 tools: mcp__ido4__*, Read, Grep, Glob

@@ -29,7 +29,7 @@ Never auto-resolve user decisions. The ingestion trigger is an explicit user dec
 
 - Report progress at stage boundaries, not individual tool calls.
 - Report verdicts, findings, and decisions.
-- **Track progress via a task list.** At the start of this skill, create a task list (using `TodoWrite` or your equivalent task-tracking tool) with one entry per stage: *Stage 0: Resolve spec path*, *Stage 1: Ingestion preview (dry-run)*, *Stage 2: Ingest (on user approval)*. Mark each entry `in_progress` when you begin it and `completed` when done.
+- **Track progress via a task list.** At the start of this skill, create a task list using your task-tracking tool with one entry per stage: *Stage 0: Resolve spec path*, *Stage 1: Ingestion preview (dry-run)*, *Stage 2: Ingest (on user approval)*. Mark each entry `in_progress` when you begin it and `completed` when done.
 
 Use `$ARGUMENTS` as the path to the technical spec file.
 

@@ -12,7 +12,7 @@ ido4specs (companion plugin, upstream)
         │
         ▼ (hand off *-tech-spec.md)
 ido4dev (this plugin)
-  ├── Skills (~23, in flux during Phase 2 — see "Active Work" below) — Governance workflows (standup, planning, sandbox, ingest-spec, etc.) + new shells (review, execute-task)
+  ├── Skills (11) — Stateful workflows (onboard, guided-demo, sandbox, sandbox-explore, ingest-spec) + pending Phase 2 Stage 4 cleanup (3 soft-deprecated sandbox-*, pilot-test + spec-quality + spec-validate migration debt)
   ├── Agents (1)      — project-manager (PM)
   ├── Hooks (2 types) — SessionStart (MCP server install), PostToolUse (governance signals)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}
@@ -20,7 +20,7 @@ ido4dev (this plugin)
 @ido4/mcp (npm package, installed automatically)
   ├── Tools (57 Hydro / 56 Scrum / 53 Shape Up)
   ├── Resources (9)
-  └── Prompts (7)
+  └── Prompts (8 methodology-aware ceremonies) — standup, plan, board, compliance, health, retro, review, execute-task. Invoked as /mcp__ido4__<prompt> slash commands.
 
 @ido4/core (npm dependency of @ido4/mcp)
   └── Domain logic: BRE, profiles, services, repositories
@@ -44,13 +44,14 @@ The decomposition / authoring slice of this plugin was extracted into a standalo
 
 ## Active Work — Phase 2 Plugin Diet (in progress)
 
-The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: convert the current ~23-skill surface — most ceremony skills duplicate methodology-aware logic that already lives canonically in `@ido4/mcp`'s `PromptGenerators` — into ~8 thin shells via the **Runtime Prompt Rendering** pattern. Each shell is a one-line `` !`node ido4-render-prompt <ceremony>` `` bash injection that calls a small CLI shipped with `@ido4/mcp`; the CLI reads the active methodology profile, dispatches to the right generator, and prints the profile-aware ceremony prompt to stdout. Single source of truth (the generators), profile-aware at invocation, zero build-step sync.
+The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: reduce the plugin skill surface to stateful workflows, letting MCP Prompts serve the ceremony surface directly via `/mcp__ido4__<prompt>` slash commands. The methodology-aware PromptGenerators in `@ido4/mcp` are the single source of truth for ceremonies; the plugin no longer duplicates them.
 
 **State as of 2026-04-17:**
 - **Phase 1** (cleanup, planning docs) — complete
-- **Phase 2.1** (proof: `review` + `execute-task` shells + `render-prompt-cli.js` CLI in `@ido4/mcp`) — complete, **live-verified** in fresh Claude Code session against all three methodologies
-- **Phase 2 Stage 3** (cascade: replace 10 ceremony duplicates with shells) — next
-- **Phase 3** (hooks rebuild) and **Phase 4** (PM autonomy) — sequenced but not yet started
+- **Phase 2.1** (shell-skill proof via Runtime Prompt Rendering) — ABANDONED after live verification. The pattern was built to solve a problem that turned out not to exist: MCP Prompts ARE invokable as slash commands in Claude Code as `/mcp__ido4__<prompt>`. Pivoted to Option A (MCP-as-ceremony-surface). See `docs/phase-2-brief.md` for the reasoning.
+- **Phase 2.2** (ceremony skill deletion + reference sweep) — complete. 10 ceremony duplicates (standup/board/health/compliance/plan-wave|sprint|cycle/retro-wave|sprint|cycle) deleted; PM agent, onboard, guided-demo, sandbox, ingest-spec, pilot-test, hooks, README updated to reference the MCP ceremony prompts.
+- **Phase 2 Stage 4** (migration debt cleanup: sandbox-hydro|scrum|shape-up hard-removal, spec-quality move to ido4specs, spec-validate delete, pilot-test rebrand, tech-spec-validator bundle) — next.
+- **Phase 3** (hooks rebuild) and **Phase 4** (PM autonomy) — sequenced but not yet started.
 
 **Before changing skills, agents, hooks, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` and `~/dev-projects/ido4dev/docs/phase-2-brief.md` first. Decisions are recorded in plan §6; do not re-litigate.
 
@@ -110,7 +111,7 @@ Before writing or auditing skills, agents, or prompts: read `docs/prompt-strateg
 
 ## E2E Testing Protocol
 
-When monitoring a live ido4dev session (any skill — standup, plan-wave, ingest-spec, sandbox-explore, etc.), follow this protocol.
+When monitoring a live ido4dev session (any plugin skill like ingest-spec/sandbox-explore/guided-demo, or any MCP ceremony like `/mcp__ido4__standup`, `/mcp__ido4__plan`), follow this protocol.
 
 **Before starting a new test round, read the most recent report in `reports/e2e-00N-*.md`.** Each round's report contains the current state of observations, known platform quirks (subagent execution patterns, skill-discovery inconsistencies, session bloat concerns), and the iteration pattern that emerged from prior rounds. Start there — it's the source of truth for round-to-round continuity.
 

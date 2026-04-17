@@ -220,7 +220,7 @@ Call the tools a standup would use:
 3. `get_analytics` (wave-002)
 4. `list_agents`
 
-**Check**: All 4 return substantive data. An LLM running `/standup` would have real audit events, real analytics, and agent status to reason from — not just snapshot data.
+**Check**: All 4 return substantive data. An LLM running `/mcp__ido4__standup` would have real audit events, real analytics, and agent status to reason from — not just snapshot data.
 
 ### 5B: Compliance Intelligence Data
 
@@ -230,7 +230,7 @@ Call the tools a compliance audit would use:
 3. `analyze_dependencies` (T9)
 4. `query_audit_trail` (recent, to see actor patterns)
 
-**Check**: Quantitative score + structural violations + audit trail actor data all available. The `/compliance` skill can produce a 3-part report (quantitative + structural + synthesis).
+**Check**: Quantitative score + structural violations + audit trail actor data all available. The `/mcp__ido4__compliance` ceremony can produce a 3-part report (quantitative + structural + synthesis).
 
 ### 5C: Report
 
@@ -357,12 +357,12 @@ After the automated report, tell the user:
 >
 > **Run each governance skill to verify data-backed intelligence:**
 >
-> 1. `/health` — Should show YELLOW or RED with compliance grade, throughput, agent status
-> 2. `/standup` — Should reference audit trail events, flag cycle time outliers, show agent activity
-> 3. `/board` — Should show kanban with flow analysis, blocked %, agent annotations
-> 4. `/compliance` — Should show 3-part report: quantitative score + structural audit + synthesis
-> 5. `/retro-wave` — Should show real analytics (throughput, cycle time, blocking time), actor analysis
-> 6. `/plan-wave` — Should use analytics for capacity, compliance for constraints
+> 1. `/mcp__ido4__health` — Should show YELLOW or RED with compliance grade, throughput, agent status
+> 2. `/mcp__ido4__standup` — Should reference audit trail events, flag cycle time outliers, show agent activity
+> 3. `/mcp__ido4__board` — Should show kanban with flow analysis, blocked %, agent annotations
+> 4. `/mcp__ido4__compliance` — Should show 3-part report: quantitative score + structural audit + synthesis
+> 5. `/mcp__ido4__retro` — Should show real analytics (throughput, cycle time, blocking time), actor analysis (methodology-aware)
+> 6. `/mcp__ido4__plan` — Should use analytics for capacity, compliance for constraints (methodology-aware)
 >
 > After verifying skills, run `/pilot-test cleanup` to destroy the sandbox.
 

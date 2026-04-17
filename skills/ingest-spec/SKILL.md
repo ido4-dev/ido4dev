@@ -90,7 +90,7 @@ Only proceed if the user explicitly approved the Stage 1 preview with "yes", "pr
    - Issues created (count, with URLs if available)
    - Any creation failures and their causes (GitHub API errors, rate limits, permission issues)
    - Sub-issue relationships established (parent container → task linkage)
-3. Point the user at follow-up skills for the new issues (`/ido4dev:board`, `/ido4dev:standup`, `/ido4dev:health`) so they can start governing the freshly ingested work.
+3. Point the user at follow-up ceremonies for the new issues (`/mcp__ido4__board`, `/mcp__ido4__standup`, `/mcp__ido4__health`) so they can start governing the freshly ingested work.
 
 ---
 

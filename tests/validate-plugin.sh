@@ -62,7 +62,7 @@ done
 echo ""
 echo "▸ Skills"
 
-EXPECTED_SKILLS="standup board compliance onboard guided-demo sandbox-explore sandbox plan-wave plan-sprint plan-cycle retro-wave retro-sprint retro-cycle ingest-spec spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up"
+EXPECTED_SKILLS="onboard guided-demo sandbox-explore sandbox ingest-spec spec-validate spec-quality pilot-test sandbox-hydro sandbox-scrum sandbox-shape-up"
 
 for SKILL in $EXPECTED_SKILLS; do
   SKILL_FILE="skills/$SKILL/SKILL.md"

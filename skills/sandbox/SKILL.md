@@ -57,7 +57,7 @@ Read `.ido4/sandbox-memory-seed.md` and write its contents to the auto-memory fi
 "Sandbox ready! Here's what to do next:
 - `/ido4dev:guided-demo` — Four-act governance walkthrough (recommended, ~15 minutes)
 - `/ido4dev:sandbox-explore` — Interactive exploration (pick what to investigate)
-- `/ido4dev:standup` — Jump straight into a governance standup briefing"
+- `/mcp__ido4__standup` — Jump straight into a governance standup briefing (methodology-aware)"
 
 ---
 
@@ -68,7 +68,7 @@ Read `.ido4/project-info.json` and check `scenarioId`:
 "This is a [methodology] sandbox. What would you like to do?
 - `/ido4dev:guided-demo` — Full governance walkthrough
 - `/ido4dev:sandbox-explore` — Interactive exploration
-- `/ido4dev:standup` — Governance standup briefing
+- `/mcp__ido4__standup` — Governance standup briefing (methodology-aware)
 - Say 'reset' to start fresh, or 'destroy' to clean up."
 
 If `$ARGUMENTS` contains "cleanup" or "destroy", jump to Phase 4.

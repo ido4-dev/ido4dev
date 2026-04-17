@@ -12,7 +12,7 @@ ido4dev gives AI coding agents the understanding to build correctly:
 - **Multi-agent coordination** — work distribution, task locking, handoff protocols
 - **Methodology support** — Hydro (wave-based), Scrum (sprint-based), Shape Up (cycle-based). The engine is code; methodologies are profiles.
 
-21 skills, 1 agent (project-manager), 2 governance hooks. Built on the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
+11 plugin skills for stateful workflows (onboarding, sandbox lifecycle, spec ingestion), plus methodology-aware MCP ceremony prompts (`/mcp__ido4__standup`, `/mcp__ido4__plan`, `/mcp__ido4__retro`, etc.) served directly by the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. 1 agent (project-manager), 2 governance hooks. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
 
 ## Installation
 
@@ -38,16 +38,25 @@ export GITHUB_TOKEN=$(gh auth token)
 
 The onboarding skill auto-clones a [demo codebase](https://github.com/ido4-dev/ido4-demo), creates a governed sandbox with embedded violations, and walks you through governance discovery in ~10 minutes.
 
-## Skills
+## Commands
 
-| Category | Skills |
-|----------|--------|
+Plugin skills (stateful workflows):
+
+| Category | Slash command |
+|----------|---------------|
 | **Onboarding** | `/ido4dev:onboard`, `/ido4dev:guided-demo`, `/ido4dev:sandbox-explore` |
-| **Project Intelligence** | `/ido4dev:standup`, `/ido4dev:board`, `/ido4dev:health`, `/ido4dev:compliance` |
-| **Planning** | `/ido4dev:plan-wave`, `/ido4dev:plan-sprint`, `/ido4dev:plan-cycle` |
-| **Retrospectives** | `/ido4dev:retro-wave`, `/ido4dev:retro-sprint`, `/ido4dev:retro-cycle` |
-| **Spec Ingestion** | `/ido4dev:ingest-spec` (authoring lives upstream in `ido4specs`), `/ido4dev:spec-validate`, `/ido4dev:spec-quality` |
-| **Sandbox** | `/ido4dev:sandbox`, `/ido4dev:pilot-test` |
+| **Spec Ingestion** | `/ido4dev:ingest-spec` (authoring lives upstream in `ido4specs`) |
+| **Sandbox** | `/ido4dev:sandbox` |
+
+MCP ceremony prompts (methodology-aware — adapt to Hydro/Scrum/Shape Up based on the active profile):
+
+| Category | Slash command |
+|----------|---------------|
+| **Project Intelligence** | `/mcp__ido4__standup`, `/mcp__ido4__board`, `/mcp__ido4__health`, `/mcp__ido4__compliance` |
+| **Planning & Retros** | `/mcp__ido4__plan`, `/mcp__ido4__retro` |
+| **Per-container** | `/mcp__ido4__review`, `/mcp__ido4__execute-task` |
+
+Ceremony commands live in the MCP server rather than the plugin so they ship with the methodology-aware prompt generators as a single source of truth. Type `/` in Claude Code to see them all in autocomplete.
 
 ## Part of the ido4 Suite
 

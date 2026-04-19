@@ -100,12 +100,12 @@ After each Stage 4 item:
 - [x] 10 ceremony duplicates deleted (standup/board/health/compliance/plan-wave|sprint|cycle/retro-wave|sprint|cycle)
 - [x] PM agent references updated to methodology-neutral MCP names
 - [x] `validate-plugin.sh` EXPECTED_SKILLS accurate
-- [ ] 3 sandbox-* soft-deprecated skills hard-removed (Stage 4)
-- [ ] `spec-quality` moved to ido4specs (Stage 4)
-- [ ] `spec-validate` deleted (Stage 4)
-- [ ] `pilot-test` re-branded or relocated (Stage 4)
-- [ ] `tech-spec-validator.js` bundled in ido4dev `dist/` (Stage 4)
-- [ ] `ingest-spec` uses bundled validator for fail-fast pre-validation (Stage 4)
+- [x] 3 sandbox-* soft-deprecated skills hard-removed (Stage 4 item 1, 2026-04-19)
+- [ ] `spec-quality` moved to ido4specs (Stage 4 item 4)
+- [x] `spec-validate` deleted (Stage 4 item 2, 2026-04-19)
+- [x] `pilot-test` re-branded dev-only (Stage 4 item 3, 2026-04-19)
+- [ ] `tech-spec-validator.js` bundled in ido4dev `dist/` (Stage 4 item 5)
+- [ ] `ingest-spec` uses bundled validator for fail-fast pre-validation (Stage 4 item 5)
 - [ ] E2E smoke test runs cleanly against the new architecture (Stage 4 item 6)
 - [x] Architecture-evolution-plan §11 status log updated with Phase 2.2 completion
 - [x] This brief updated to match committed direction
@@ -121,5 +121,6 @@ After each Stage 4 item:
 | 2026-04-17 | Phase 2.1 live-verified end-to-end (review + execute-task shells against Hydro/Scrum/Shape Up fixtures). |
 | 2026-04-17 | Stage 3 cascade #1 (`health` shell) blocked by Claude Code name-collision failure. Direction re-opened. |
 | 2026-04-17 | Option A committed: MCP Prompts as ceremony surface, no plugin shells. Phase 2.2 landed in three paired commits. Brief rewritten in place against the new direction. Stage 4 remaining. |
+| 2026-04-19 | Stage 4 items 1-3 landed on `main`: sandbox-hydro/scrum/shape-up hard-removed; spec-validate deleted; pilot-test rebranded dev-only (`disable-model-invocation: true`, description prefixed `[dev-only]`, legacy `commands/pilot-test.md` wrapper removed). Plugin skill count 11 → 7. Items 4 (spec-quality migration), 5 (tech-spec-validator bundle + ingest-spec pre-validation), 6 (E2E smoke test) remaining. |
 
 This log updates as Stage 4 items complete.

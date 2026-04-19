@@ -12,7 +12,7 @@ ido4specs (companion plugin, upstream)
         │
         ▼ (hand off *-tech-spec.md)
 ido4dev (this plugin)
-  ├── Skills (11) — Stateful workflows (onboard, guided-demo, sandbox, sandbox-explore, ingest-spec) + pending Phase 2 Stage 4 cleanup (3 soft-deprecated sandbox-*, pilot-test + spec-quality + spec-validate migration debt)
+  ├── Skills (7) — Stateful workflows (onboard, guided-demo, sandbox, sandbox-explore, ingest-spec), authoring guidance (spec-quality — moving to ido4specs in Stage 4 item 4), dev tooling (pilot-test — scoped dev-only)
   ├── Agents (1)      — project-manager (PM)
   ├── Hooks (2 types) — SessionStart (MCP server install), PostToolUse (governance signals)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}
@@ -46,11 +46,11 @@ The decomposition / authoring slice of this plugin was extracted into a standalo
 
 The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: reduce the plugin skill surface to stateful workflows, letting MCP Prompts serve the ceremony surface directly via `/mcp__plugin_ido4dev_ido4__<prompt>` slash commands. The methodology-aware PromptGenerators in `@ido4/mcp` are the single source of truth for ceremonies; the plugin no longer duplicates them.
 
-**State as of 2026-04-17:**
+**State as of 2026-04-19:**
 - **Phase 1** (cleanup, planning docs) — complete
 - **Phase 2.1** (shell-skill proof via Runtime Prompt Rendering) — ABANDONED after live verification. The pattern was built to solve a problem that turned out not to exist: MCP Prompts ARE invokable as slash commands in Claude Code as `/mcp__plugin_ido4dev_ido4__<prompt>`. Pivoted to Option A (MCP-as-ceremony-surface). See `docs/phase-2-brief.md` for the reasoning.
 - **Phase 2.2** (ceremony skill deletion + reference sweep) — complete. 10 ceremony duplicates (standup/board/health/compliance/plan-wave|sprint|cycle/retro-wave|sprint|cycle) deleted; PM agent, onboard, guided-demo, sandbox, ingest-spec, pilot-test, hooks, README updated to reference the MCP ceremony prompts.
-- **Phase 2 Stage 4** (migration debt cleanup: sandbox-hydro|scrum|shape-up hard-removal, spec-quality move to ido4specs, spec-validate delete, pilot-test rebrand, tech-spec-validator bundle) — next.
+- **Phase 2 Stage 4** (migration debt cleanup) — partial. Items 1-3 landed (sandbox-hydro|scrum|shape-up hard-removed; spec-validate deleted; pilot-test rebranded dev-only with `disable-model-invocation: true`). Items 4-6 remaining: spec-quality → ido4specs, tech-spec-validator bundle into ido4dev + ingest-spec pre-validation, end-of-phase E2E smoke test.
 - **Phase 3** (hooks rebuild) and **Phase 4** (PM autonomy) — sequenced but not yet started.
 
 **Before changing skills, agents, hooks, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` and `~/dev-projects/ido4dev/docs/phase-2-brief.md` first. Decisions are recorded in plan §6; do not re-litigate.

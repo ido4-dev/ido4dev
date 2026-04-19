@@ -62,7 +62,7 @@ done
 echo ""
 echo "▸ Skills"
 
-EXPECTED_SKILLS="onboard guided-demo sandbox-explore sandbox ingest-spec spec-validate spec-quality pilot-test"
+EXPECTED_SKILLS="onboard guided-demo sandbox-explore sandbox ingest-spec spec-quality pilot-test"
 
 for SKILL in $EXPECTED_SKILLS; do
   SKILL_FILE="skills/$SKILL/SKILL.md"

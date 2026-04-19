@@ -12,7 +12,7 @@ ido4dev gives AI coding agents the understanding to build correctly:
 - **Multi-agent coordination** — work distribution, task locking, handoff protocols
 - **Methodology support** — Hydro (wave-based), Scrum (sprint-based), Shape Up (cycle-based). The engine is code; methodologies are profiles.
 
-11 plugin skills for stateful workflows (onboarding, sandbox lifecycle, spec ingestion), plus methodology-aware MCP ceremony prompts (`/mcp__ido4__standup`, `/mcp__ido4__plan`, `/mcp__ido4__retro`, etc.) served directly by the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. 1 agent (project-manager), 2 governance hooks. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
+11 plugin skills for stateful workflows (onboarding, sandbox lifecycle, spec ingestion), plus methodology-aware MCP ceremony prompts (`/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro`, etc.) served directly by the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. 1 agent (project-manager), 2 governance hooks. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
 
 ## Installation
 
@@ -52,11 +52,11 @@ MCP ceremony prompts (methodology-aware — adapt to Hydro/Scrum/Shape Up based 
 
 | Category | Slash command |
 |----------|---------------|
-| **Project Intelligence** | `/mcp__ido4__standup`, `/mcp__ido4__board`, `/mcp__ido4__health`, `/mcp__ido4__compliance` |
-| **Planning & Retros** | `/mcp__ido4__plan`, `/mcp__ido4__retro` |
-| **Per-container** | `/mcp__ido4__review`, `/mcp__ido4__execute-task` |
+| **Project Intelligence** | `/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__board`, `/mcp__plugin_ido4dev_ido4__health`, `/mcp__plugin_ido4dev_ido4__compliance` |
+| **Planning & Retros** | `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro` |
+| **Per-container** | `/mcp__plugin_ido4dev_ido4__review`, `/mcp__plugin_ido4dev_ido4__execute-task` |
 
-Ceremony commands live in the MCP server rather than the plugin so they ship with the methodology-aware prompt generators as a single source of truth. Type `/` in Claude Code to see them all in autocomplete.
+Ceremony commands live in the MCP server rather than the plugin so they ship with the methodology-aware prompt generators as a single source of truth. In Claude Code's autocomplete these appear in their display form as `/plugin:ido4dev:ido4:<name>` — select from autocomplete (type `/<name>` + tab, e.g. `/standup` + tab); the command resolves to the `/mcp__plugin_ido4dev_ido4__<name>` execution form listed above. Direct typing of the execution form also works.
 
 ## Part of the ido4 Suite
 

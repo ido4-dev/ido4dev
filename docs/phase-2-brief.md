@@ -1,6 +1,6 @@
 # Phase 2 Design Brief: WS1 Plugin Diet Execution
 
-**Status:** Phase 2.2 complete (ceremony duplicates deleted, references swept to `/mcp__ido4__*`). Phase 2 Stage 4 (migration debt cleanup) is the remaining work.
+**Status:** Phase 2.2 complete (ceremony duplicates deleted, references swept to `/mcp__plugin_ido4dev_ido4__*`). Phase 2 Stage 4 (migration debt cleanup) is the remaining work.
 **Created:** 2026-04-17 (original); rewritten 2026-04-17 after the Option A commit.
 **Parent plan:** `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` §8 WS1.
 **Sequencing authority:** parent plan §6 #15 + #17.
@@ -12,7 +12,7 @@ This brief captures the committed design and execution sequence for Phase 2. It 
 ## 1. Goal (end-of-phase state)
 
 - Plugin skill count reduced from 21 to 5 — stateful workflows only.
-- 10 ceremony duplicate skills routed to `/mcp__ido4__<ceremony>` slash commands (no plugin shells).
+- 10 ceremony duplicate skills routed to `/mcp__plugin_ido4dev_ido4__<ceremony>` slash commands (no plugin shells).
 - 3 soft-deprecated `sandbox-*` skills hard-removed.
 - `spec-quality` moved to `ido4specs` (its natural home post-extraction).
 - `spec-validate` deleted (duplicates the bundled `tech-spec-validator.js`).
@@ -26,13 +26,13 @@ This brief captures the committed design and execution sequence for Phase 2. It 
 
 ## 2. Committed direction: MCP Prompts as ceremony surface
 
-Ceremonies are invoked as `/mcp__ido4__<prompt>` slash commands, served directly by the MCP server. Plugin skills exist only for stateful workflows (`onboard`, `guided-demo`, `sandbox`, `sandbox-explore`, `ingest-spec`). One source of truth for ceremonies (`@ido4/mcp/src/prompts/`), one invocation path, one place to edit methodology-aware reasoning.
+Ceremonies are invoked as `/mcp__plugin_ido4dev_ido4__<prompt>` slash commands, served directly by the MCP server. Plugin skills exist only for stateful workflows (`onboard`, `guided-demo`, `sandbox`, `sandbox-explore`, `ingest-spec`). One source of truth for ceremonies (`@ido4/mcp/src/prompts/`), one invocation path, one place to edit methodology-aware reasoning.
 
 **Why this path and not the shell-skill pattern that preceded it:**
 
 - **The premise that motivated shells was wrong.** MCP Prompts ARE slash-accessible in Claude Code as `/mcp__<server>__<prompt>`. Verified from Claude Code's own docs (`code.claude.com/docs/en/commands.md` — "MCP servers can expose prompts that appear as commands… `/mcp__<server>__<prompt>`… dynamically discovered from connected servers") and by the user's live invocation of `/mcp__plugin_ido4dev_ido4__health`, which rendered the correct Hydro health prompt and produced the right GREEN/YELLOW/RED output. The earlier `claude-code-guide` subagent finding that MCP Prompts were not slash-accessible was wrong.
 - **Shells had a migration blocker.** Replacing an existing skill name with a bash-injection shell produced "no body content" in Claude Code, even after `/reload-plugins` and a full Claude Code restart. Not root-caused; likely a plugin-manifest caching layer. Workarounds (version-bump-and-reshape, rename to non-colliding names) add cost without solving the underlying question.
-- **Verbose UX cost is deferred, not architected around.** `/mcp__ido4__standup` reads longer than `/ido4dev:standup`, but autocomplete reaches it in one tab. Per parent plan §6 #2 (no live users), the aesthetic cost is not load-bearing right now. If user feedback later requires a shorter alias, the right response is to ask Anthropic for an MCP-prompt alias mechanism, not to ship parallel infrastructure.
+- **Verbose UX cost is deferred, not architected around.** `/mcp__plugin_ido4dev_ido4__standup` reads longer than `/ido4dev:standup`, but autocomplete reaches it in one tab. Per parent plan §6 #2 (no live users), the aesthetic cost is not load-bearing right now. If user feedback later requires a shorter alias, the right response is to ask Anthropic for an MCP-prompt alias mechanism, not to ship parallel infrastructure.
 - **Cross-MCP-client reach strengthens.** Cursor, Cline (when MCP-prompt support lands), and any future MCP client get the ceremonies natively via `listPrompts` / `getPrompt`. No Claude-Code-only shell detour.
 - **Future-proof.** If Anthropic ships a rename or alias mechanism for MCP prompts, migration is zero-cost — we're already on the native path.
 
@@ -52,7 +52,7 @@ Three commits on `phase-2.1-proof`:
 
 - **Commit A (`@ido4/mcp`)** — clean `git revert` of 660c618 (the `render-prompt-cli` feature). Removes `src/render-prompt.ts`, `src/render-prompt-cli.ts`, paired test files, bin entry, `prepare` script. Test suite back to 458/458 passing, zero regressions.
 - **Commit B (`ido4dev`)** — delete the 3 shell skills (`review`, `execute-task`, `health`-as-shell), `tests/shell-skills-render.mjs`, `validate-plugin.sh` §K (Shell Skills Structure), `docs/mcp-runtime-contract.md` "CLI surfaces" section.
-- **Commit C (`ido4dev`)** — delete 9 ceremony duplicates (`standup`, `board`, `compliance`, `plan-wave`/`sprint`/`cycle`, `retro-wave`/`sprint`/`cycle`) + 6 legacy `commands/*.md` wrappers; sweep ceremony references across `agents/project-manager/AGENT.md` (9 refs), `skills/onboard/`, `skills/guided-demo/`, `skills/ingest-spec/`, `skills/sandbox/`, `skills/pilot-test/`, `hooks/hooks.json` (LLM prompt text examples), `README.md`, `CLAUDE.md`. Every `/ido4dev:<ceremony>` or bare `/<ceremony>` became `/mcp__ido4__<ceremony>`. The PM agent's Hydro-hardcoded identity (5 Unbreakable Principles, wave state machine) was **not** touched — that's WS3 scope.
+- **Commit C (`ido4dev`)** — delete 9 ceremony duplicates (`standup`, `board`, `compliance`, `plan-wave`/`sprint`/`cycle`, `retro-wave`/`sprint`/`cycle`) + 6 legacy `commands/*.md` wrappers; sweep ceremony references across `agents/project-manager/AGENT.md` (9 refs), `skills/onboard/`, `skills/guided-demo/`, `skills/ingest-spec/`, `skills/sandbox/`, `skills/pilot-test/`, `hooks/hooks.json` (LLM prompt text examples), `README.md`, `CLAUDE.md`. Every `/ido4dev:<ceremony>` or bare `/<ceremony>` became `/mcp__plugin_ido4dev_ido4__<ceremony>`. The PM agent's Hydro-hardcoded identity (5 Unbreakable Principles, wave state machine) was **not** touched — that's WS3 scope.
 
 Each commit left the plugin in a working state (`validate-plugin.sh` 108/108 after B, 71/71 after C).
 
@@ -70,7 +70,7 @@ Independent items; execution order within Stage 4 is flexible.
 
 5. **Bundle `tech-spec-validator.js` into `ido4dev/dist/`** — mirror the ido4specs dual-bundle pattern. Adds fail-fast pre-validation to `ingest-spec` so parser version skew between ido4specs and ido4dev does not show up as a late-stage ingestion failure. Coordinates with interface contract #5.
 
-6. **End-of-phase E2E smoke test** — fresh Claude Code session, install ido4specs + ido4dev from marketplace, walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. Plus one invocation each of `/mcp__ido4__standup`, `/mcp__ido4__plan`, `/mcp__ido4__retro` against the seeded sandbox. Verifies the MCP-namespace UX is real and the architecture holds end-to-end. Produces `reports/e2e-004-phase-2-completion.md`.
+6. **End-of-phase E2E smoke test** — fresh Claude Code session, install ido4specs + ido4dev from marketplace, walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. Plus one invocation each of `/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro` against the seeded sandbox. Verifies the MCP-namespace UX is real and the architecture holds end-to-end. Produces `reports/e2e-004-phase-2-completion.md`.
 
 ---
 
@@ -81,7 +81,7 @@ After each Stage 4 item:
 1. `bash tests/validate-plugin.sh` — structural (frontmatter, EXPECTED_SKILLS, cross-refs, tool prefixes). 71/71 passing as of end-Phase-2.2.
 2. `node tests/compatibility.mjs` — tool-surface check (criticalTools exist in installed `@ido4/mcp`). Unaffected by skill renames.
 3. `node tests/round3-agent-artifact.mjs` + `node tests/enforcement-probes.mjs` — behavior-level defenses against the silent drift that `compatibility.mjs` cannot catch.
-4. Post-Stage-4: live-session invocation of a ceremony (`/mcp__ido4__standup`) and a stateful workflow (`/ido4dev:ingest-spec`) to confirm user-visible UX.
+4. Post-Stage-4: live-session invocation of a ceremony (`/mcp__plugin_ido4dev_ido4__standup`) and a stateful workflow (`/ido4dev:ingest-spec`) to confirm user-visible UX.
 
 ---
 

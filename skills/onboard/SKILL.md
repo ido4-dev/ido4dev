@@ -186,8 +186,8 @@ Present clearly:
 **What to explore next:**
 - `/ido4dev:guided-demo` — Full guided demo with four acts (15 minutes)
 - `/ido4dev:sandbox-explore` — Interactive sandbox exploration (try breaking rules, fixing violations)
-- `/mcp__ido4__standup` — Run a governance standup briefing (methodology-aware)
-- `/mcp__ido4__compliance` — Deep dive into compliance scoring (methodology-aware)
+- `/mcp__plugin_ido4dev_ido4__standup` — Run a governance standup briefing (methodology-aware)
+- `/mcp__plugin_ido4dev_ido4__compliance` — Deep dive into compliance scoring (methodology-aware)
 - `/ido4dev:ingest-spec` — Ingest a pre-authored technical spec into your project's methodology
 
 **To author technical specs** (so you have one to ingest on your real project), install the companion plugin `ido4specs` from the same marketplace. Pipeline: `/ido4shape:*` (strategic spec) → `/ido4specs:create-spec` → `/ido4specs:synthesize-spec` → `/ido4specs:validate-spec` → `/ido4dev:ingest-spec`.

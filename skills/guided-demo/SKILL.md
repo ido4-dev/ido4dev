@@ -154,6 +154,6 @@ From stakeholder conversation to governed implementation — every task traceabl
 
 **Explore further:**
 - `/ido4dev:sandbox-explore` — Interactive sandbox exploration
-- `/mcp__ido4__standup` — Full governance standup briefing (methodology-aware)
-- `/mcp__ido4__compliance` — Deep compliance analysis (methodology-aware)
+- `/mcp__plugin_ido4dev_ido4__standup` — Full governance standup briefing (methodology-aware)
+- `/mcp__plugin_ido4dev_ido4__compliance` — Deep compliance analysis (methodology-aware)
 - `/ido4dev:onboard` — Initialize ido4 on your own project"

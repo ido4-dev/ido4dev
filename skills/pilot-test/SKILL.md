@@ -1,7 +1,8 @@
 ---
 name: pilot-test
-description: End-to-end verification of the governance platform against a live sandbox — exercises every Phase 4 service and validates the data pipeline
+description: "[dev-only] End-to-end verification of the governance platform against a live sandbox — exercises every Phase 4 service and validates the data pipeline. Use before releases to smoke-test the MCP tool surface, aggregator integration, and BRE behavior. Not a user-facing skill — Claude should not auto-suggest this."
 user-invocable: true
+disable-model-invocation: true
 allowed-tools: mcp__plugin_ido4dev_ido4__*
 ---
 

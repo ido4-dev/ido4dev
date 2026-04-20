@@ -46,12 +46,13 @@ The decomposition / authoring slice of this plugin was extracted into a standalo
 
 The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: reduce the plugin skill surface to stateful workflows, letting MCP Prompts serve the ceremony surface directly via `/mcp__plugin_ido4dev_ido4__<prompt>` slash commands. The methodology-aware PromptGenerators in `@ido4/mcp` are the single source of truth for ceremonies; the plugin no longer duplicates them.
 
-**State as of 2026-04-19:**
+**State as of 2026-04-20:**
 - **Phase 1** (cleanup, planning docs) — complete
 - **Phase 2.1** (shell-skill proof via Runtime Prompt Rendering) — ABANDONED after live verification. The pattern was built to solve a problem that turned out not to exist: MCP Prompts ARE invokable as slash commands in Claude Code as `/mcp__plugin_ido4dev_ido4__<prompt>`. Pivoted to Option A (MCP-as-ceremony-surface). See `docs/phase-2-brief.md` for the reasoning.
 - **Phase 2.2** (ceremony skill deletion + reference sweep) — complete. 10 ceremony duplicates (standup/board/health/compliance/plan-wave|sprint|cycle/retro-wave|sprint|cycle) deleted; PM agent, onboard, guided-demo, sandbox, ingest-spec, pilot-test, hooks, README updated to reference the MCP ceremony prompts.
-- **Phase 2 Stage 4** (migration debt cleanup) — partial. Items 1-3 landed (sandbox-hydro|scrum|shape-up hard-removed; spec-validate deleted; pilot-test rebranded dev-only with `disable-model-invocation: true`). Items 4-6 remaining: spec-quality → ido4specs, tech-spec-validator bundle into ido4dev + ingest-spec pre-validation, end-of-phase E2E smoke test.
-- **Phase 3** (hooks rebuild) and **Phase 4** (PM autonomy) — sequenced but not yet started.
+- **Phase 2 Stage 4** (migration debt cleanup) — **complete (2026-04-20)**. All six items landed: sandbox-* hard-removed, spec-validate deleted, pilot-test rebranded dev-only, spec-quality migrated to ido4specs (v0.4.0 released), tech-spec-validator bundled into ido4dev with `ingest-spec` Stage 0b pre-validation, auto-update workflow + cross-repo dispatch wired to ido4 monorepo, end-of-phase smoke test passed (focused rather than full-vision; `reports/e2e-004-phase-2-smoke.md`). Three UX gaps surfaced and fixed in-session during smoke test.
+- **Phase 3** (hooks rebuild, WS2) — next. Architectural scoping is in `architecture-evolution-plan.md` §8 WS2; `phase-3-brief.md` (execution spec) to be written before code starts.
+- **Phase 4** (PM autonomy, WS3) — sequenced after Phase 3; depends on WS2 hook infrastructure. Also has open investigation in §7.5 about Claude Code's `CronCreate` availability.
 
 **Before changing skills, agents, hooks, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` and `~/dev-projects/ido4dev/docs/phase-2-brief.md` first. Decisions are recorded in plan §6; do not re-litigate.
 

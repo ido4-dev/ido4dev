@@ -101,12 +101,13 @@ After each Stage 4 item:
 - [x] PM agent references updated to methodology-neutral MCP names
 - [x] `validate-plugin.sh` EXPECTED_SKILLS accurate
 - [x] 3 sandbox-* soft-deprecated skills hard-removed (Stage 4 item 1, 2026-04-19)
-- [ ] `spec-quality` moved to ido4specs (Stage 4 item 4)
+- [x] `spec-quality` moved to ido4specs (Stage 4 item 4, 2026-04-20, ido4specs v0.4.0 released)
 - [x] `spec-validate` deleted (Stage 4 item 2, 2026-04-19)
 - [x] `pilot-test` re-branded dev-only (Stage 4 item 3, 2026-04-19)
-- [ ] `tech-spec-validator.js` bundled in ido4dev `dist/` (Stage 4 item 5)
-- [ ] `ingest-spec` uses bundled validator for fail-fast pre-validation (Stage 4 item 5)
-- [ ] E2E smoke test runs cleanly against the new architecture (Stage 4 item 6)
+- [x] `tech-spec-validator.js` bundled in ido4dev `dist/` (Stage 4 item 5.a, 2026-04-20, commit 1b91148)
+- [x] `ingest-spec` uses bundled validator for fail-fast pre-validation (Stage 4 item 5.a, 2026-04-20; Stage 0b reordered before project-init check in commit c4270a3)
+- [x] Auto-update workflow + cross-repo dispatch wired (Stage 4 item 5.b, 2026-04-20, commits 2d4db15 + ido4:087f04f + ido4-suite:0f2c305; `IDO4DEV_DISPATCH_TOKEN` + `PAT` secrets provisioned)
+- [x] E2E smoke test runs cleanly against the new architecture (Stage 4 item 6) — closed 2026-04-20 as a *focused* smoke test; full-vision E2E deferred to post-Phase-4 as `e2e-005`. See `reports/e2e-004-phase-2-smoke.md`.
 - [x] Architecture-evolution-plan §11 status log updated with Phase 2.2 completion
 - [x] This brief updated to match committed direction
 
@@ -122,5 +123,6 @@ After each Stage 4 item:
 | 2026-04-17 | Stage 3 cascade #1 (`health` shell) blocked by Claude Code name-collision failure. Direction re-opened. |
 | 2026-04-17 | Option A committed: MCP Prompts as ceremony surface, no plugin shells. Phase 2.2 landed in three paired commits. Brief rewritten in place against the new direction. Stage 4 remaining. |
 | 2026-04-19 | Stage 4 items 1-3 landed on `main`: sandbox-hydro/scrum/shape-up hard-removed; spec-validate deleted; pilot-test rebranded dev-only (`disable-model-invocation: true`, description prefixed `[dev-only]`, legacy `commands/pilot-test.md` wrapper removed). Plugin skill count 11 → 7. Items 4 (spec-quality migration), 5 (tech-spec-validator bundle + ingest-spec pre-validation), 6 (E2E smoke test) remaining. |
+| 2026-04-20 | **Phase 2 COMPLETE.** Stage 4 items 4/5.a/5.b landed earlier in the day (ido4specs v0.4.0 released carrying `spec-quality`; `tech-spec-validator.js` bundled into ido4dev/dist/ with version marker + checksum + update script; `update-tech-spec-validator.yml` + cross-repo dispatch from ido4's publish.yml + `IDO4DEV_DISPATCH_TOKEN` + `PAT` secrets). Mid-day: reordered `ingest-spec` Stage 0b to precede the project-init check (commit `c4270a3`). Closing smoke test (item 6, focused scope per a testing-strategy discussion) passed against `ido4shape-cloud`'s real 71KB technical spec — surfaced three UX gaps (proceed-nudge requirement, task-tracker missing Stage 0b, `CLAUDE_PLUGIN_DATA` empty in Bash-tool context), all fixed in commit `56b12ac` and re-verified same session. Full report: `reports/e2e-004-phase-2-smoke.md`. Full-vision E2E deferred to post-Phase-4 as `e2e-005`. **Next:** open `phase-3-brief.md` for WS2 (Hooks Rebuild). |
 
-This log updates as Stage 4 items complete.
+Phase 2 closed. This brief is now a historical record; future phase briefs (Phase 3 / 4) live in their own files.

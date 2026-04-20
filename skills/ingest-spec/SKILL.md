@@ -50,19 +50,9 @@ The canonical filename for an `ido4specs`-produced technical spec is `*-tech-spe
    - **Exactly one match**: use it. Tell the user: *"Found one technical spec: `{path}`. Proceeding."*
    - **Multiple matches**: list all candidates and ask the user to pick one, then STOP. Do not guess.
 
-### Check that the project is initialized
+### Stage 0b: Bundled-Validator Pre-Check
 
-Check for `.ido4/project-info.json`. If it does not exist, output:
-
-> The spec is ready but this ido4 project isn't initialized yet (no `.ido4/project-info.json`). Run `/ido4dev:onboard` to initialize — or set up the methodology choice manually — then re-run `/ido4dev:ingest-spec {spec-path}`.
-
-Then STOP. Do NOT initialize the project yourself — methodology choice is a user decision.
-
----
-
-## Stage 0b: Bundled-Validator Pre-Check
-
-Before calling the MCP ingestion tool, run the bundled `tech-spec-validator.js` locally to fail fast on structural errors. The validator is a zero-dependency Node CLI that ships with the plugin and is copied to `${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` by the `SessionStart` hook. This is defense in depth — same parser ido4specs used upstream, same result — so format drift between the two plugins is caught before an MCP tool call is made.
+Once the spec path is resolved — regardless of whether the project is initialized — run the bundled `tech-spec-validator.js` locally to fail fast on structural errors. The validator is a zero-dependency Node CLI that ships with the plugin and is copied to `${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` by the `SessionStart` hook. This is defense in depth — same parser `ido4specs` used upstream, same result — so format drift between the two plugins is caught before any MCP tool call is made, and independently of project-init state (the user learns structural errors and project-init status in one pass rather than two round trips).
 
 Run:
 
@@ -72,11 +62,19 @@ node "${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js" <spec-path>
 
 The validator prints a JSON object to stdout with shape `{valid, meta, metrics, project, groups, errors, warnings}`.
 
-**If `valid: true`:** report a concise one-liner ("Structural validation passed: N capabilities, M tasks") and proceed to Stage 1.
+**If `valid: true`:** report a concise one-liner ("Structural validation passed: N capabilities, M tasks") and proceed to the project-init check below.
 
-**If `valid: false`:** present the errors with task refs and stop. Tell the user to fix the spec upstream (via `/ido4specs:refine-spec` or another `/ido4specs:validate-spec` pass) and re-run. Do NOT proceed to `ingest_spec` — passing a malformed spec to the ingestion pipeline wastes a tool call and produces a confusing error that originates from a different layer than the root cause.
+**If `valid: false`:** present the errors with task refs. Tell the user to fix the spec upstream (via `/ido4specs:refine-spec` or another `/ido4specs:validate-spec` pass) and re-run. Also perform the project-init check below so the user sees both issues in one pass, then STOP. Do NOT proceed to `ingest_spec` — passing a malformed spec to the ingestion pipeline wastes a tool call and produces a confusing error that originates from a different layer than the root cause.
 
-**If the bundled validator is unavailable** (`${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` missing, `node` not in PATH, or the copy step failed silently): report the problem once, note that the pre-check is being skipped, and proceed to Stage 1. The MCP tool will still structurally validate the spec; the pre-check just fails slower.
+**If the bundled validator is unavailable** (`${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` missing, `node` not in PATH, or the copy step failed silently): report the problem once, note that the pre-check is being skipped, and continue to the project-init check. The MCP tool will still structurally validate the spec at Stage 1; the pre-check just fails slower.
+
+### Check that the project is initialized
+
+Check for `.ido4/project-info.json`. If it does not exist, output:
+
+> The spec is ready but this ido4 project isn't initialized yet (no `.ido4/project-info.json`). Run `/ido4dev:onboard` to initialize — or set up the methodology choice manually — then re-run `/ido4dev:ingest-spec {spec-path}`.
+
+Then STOP. Do NOT initialize the project yourself — methodology choice is a user decision.
 
 ---
 

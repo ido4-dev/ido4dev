@@ -7,6 +7,8 @@ allowed-tools: mcp__plugin_ido4dev_ido4__*, Read, Glob, Grep, Bash(node *)
 
 You bridge a validated technical spec (produced by `/ido4specs:validate-spec` or any equivalent authoring flow) to the project's GitHub issues under its chosen methodology. You preview the mapping via `ingest_spec` with `dryRun: true`, wait for explicit user approval, then run `dryRun: false` to create the issues.
 
+**Execute immediately when invoked.** On skill activation, proceed through Stage 0 → Stage 0b → Stage 1 → Stage 2 in order without waiting for additional user instruction. Stop only at the explicit user-gates: (a) Stage 1's "does the mapping look correct?" preview approval before Stage 2, and (b) any condition where the skill's prose says STOP. Do not report "awaiting the skill's instructions" — the body below IS the instructions.
+
 ## Pipeline Context
 
 The ido4 authoring pipeline lives in the `ido4specs` plugin, upstream of this one:
@@ -29,7 +31,7 @@ Never auto-resolve user decisions. The ingestion trigger is an explicit user dec
 
 - Report progress at stage boundaries, not individual tool calls.
 - Report verdicts, findings, and decisions.
-- **Track progress via a task list.** At the start of this skill, create a task list using your task-tracking tool with one entry per stage: *Stage 0: Resolve spec path*, *Stage 1: Ingestion preview (dry-run)*, *Stage 2: Ingest (on user approval)*. Mark each entry `in_progress` when you begin it and `completed` when done.
+- **Track progress via a task list.** At the start of this skill, create a task list using your task-tracking tool with one entry per stage: *Stage 0: Resolve spec path*, *Stage 0b: Bundled-validator pre-check*, *Stage 1: Ingestion preview (dry-run)*, *Stage 2: Ingest (on user approval)*. Mark each entry `in_progress` when you begin it and `completed` when done.
 
 Use `$ARGUMENTS` as the path to the technical spec file.
 
@@ -54,11 +56,20 @@ The canonical filename for an `ido4specs`-produced technical spec is `*-tech-spe
 
 Once the spec path is resolved — regardless of whether the project is initialized — run the bundled `tech-spec-validator.js` locally to fail fast on structural errors. The validator is a zero-dependency Node CLI that ships with the plugin and is copied to `${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` by the `SessionStart` hook. This is defense in depth — same parser `ido4specs` used upstream, same result — so format drift between the two plugins is caught before any MCP tool call is made, and independently of project-init state (the user learns structural errors and project-init status in one pass rather than two round trips).
 
-Run:
+**Preferred invocation:**
 
 ```bash
 node "${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js" <spec-path>
 ```
+
+**Fallback if `${CLAUDE_PLUGIN_DATA}` expands to empty** (observed in some Claude Code Bash-tool contexts, especially `--plugin-dir` local-dev mode — the variable is reliably set for `SessionStart` hooks but may not propagate to every Bash tool invocation). Discover the installed bundle and invoke it directly:
+
+```bash
+BUNDLE=$(ls ~/.claude/plugins/data/*/tech-spec-validator.js 2>/dev/null | head -1)
+node "$BUNDLE" <spec-path>
+```
+
+The `SessionStart` hook copies the bundle to `~/.claude/plugins/data/<plugin-dir-name>/tech-spec-validator.js` (where `<plugin-dir-name>` is typically `ido4dev-inline` for local-dev installs or `ido4dev` for marketplace installs). The glob above finds it regardless.
 
 The validator prints a JSON object to stdout with shape `{valid, meta, metrics, project, groups, errors, warnings}`.
 

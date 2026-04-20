@@ -317,7 +317,18 @@ These need user calls before implementation can land.
 
 Lower contribution barrier (non-TS engineers can author methodology prompts). Future enhancement — not blocking current work. Decision needed: scope into this evolution or defer.
 
-### 7.4 PM agent profile-aware identity — pure plugin work or core change?
+### 7.4 Revisit ido4dev distribution (decataloguing)
+
+`ido4dev` is deliberately not in the `ido4-plugins` marketplace catalog. The decision is captured in `~/dev-projects/ido4-suite/docs/design-decisions.md` DD-001 (rationale, cost, revisit conditions). This entry exists to queue the revisit explicitly so it doesn't fall through the cracks.
+
+**Revisit triggers (any of):**
+- Phase 4 landing — architecture stable; a more-capable plugin is paradoxically safer to catalogue because onboarding defaults can be more conservative
+- A real user or team asks for easier install (distribution pressure)
+- Claude Code plugin system gains first-class primitives for destructive operations (semantic gating would make marketplace distribution safe by construction)
+
+**Current thinking:** leave as-is until at least one trigger fires. Don't re-catalogue during Phase 3 or Phase 4 — re-cataloguing *while* the architecture is shifting is a coherence risk. Post-Phase-4 is the earliest sensible revisit window.
+
+### 7.5 PM agent profile-aware identity — pure plugin work or core change?
 
 The PM agent's principles, state machine, and lifecycle should load from the profile. Two implementation paths:
 
@@ -326,7 +337,7 @@ The PM agent's principles, state machine, and lifecycle should load from the pro
 
 **Current thinking:** Plugin-only first, to avoid premature core abstraction. Promote to core if a second agent emerges that needs the same pattern — YAGNI applies. But an unexpectedly clean core-level design that emerges from the work might flip this — stay open.
 
-### 7.5 CronCreate availability and semantics
+### 7.6 CronCreate availability and semantics
 
 Autonomous PM relies on `CronCreate` for scheduled check-ins. Need to verify the API exists in current Claude Code, semantics (per-session vs persistent, frequency limits), and whether `CronCreate` registrations survive across sessions.
 
@@ -450,7 +461,7 @@ We're done when all of these are true:
 
 6. **All four release-architecture invariants pass** — `bash ~/dev-projects/ido4-suite/scripts/audit-suite.sh` shows clean.
 
-7. **Live E2E smoke test successful** — fresh Claude Code session, install ido4specs + ido4dev from marketplace, walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. (This is the still-open closure from the original ido4specs extraction.)
+7. **Live E2E smoke test successful** — fresh Claude Code session, install `ido4specs` from the marketplace and load `ido4dev` via `--plugin-dir` (ido4dev is deliberately decatalogued — see suite `design-decisions.md` DD-001), walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. (This is the still-open closure from the original ido4specs extraction.)
 
 8. **All three methodology profiles produce equivalent UX quality** — Hydro user, Scrum user, Shape Up user each get a coherent experience. No methodology is degraded.
 

@@ -70,7 +70,7 @@ Independent items; execution order within Stage 4 is flexible.
 
 5. **Bundle `tech-spec-validator.js` into `ido4dev/dist/`** — mirror the ido4specs dual-bundle pattern. Adds fail-fast pre-validation to `ingest-spec` so parser version skew between ido4specs and ido4dev does not show up as a late-stage ingestion failure. Coordinates with interface contract #5.
 
-6. **End-of-phase E2E smoke test** — fresh Claude Code session, install ido4specs + ido4dev from marketplace, walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. Plus one invocation each of `/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro` against the seeded sandbox. Verifies the MCP-namespace UX is real and the architecture holds end-to-end. Produces `reports/e2e-004-phase-2-completion.md`.
+6. **End-of-phase E2E smoke test** — fresh Claude Code session, install `ido4specs` from the marketplace and load `ido4dev` via `--plugin-dir` (ido4dev is deliberately decatalogued; see `~/dev-projects/ido4-suite/docs/design-decisions.md` DD-001), walk `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` against a real strategic spec. Plus one invocation each of `/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro` against the seeded sandbox. Verifies the MCP-namespace UX is real and the architecture holds end-to-end. Produces `reports/e2e-004-phase-2-completion.md`. **Note (2026-04-20):** this full E2E is deferred until after Phase 3 + Phase 4 so one comprehensive test covers the complete vision. Phase 2 closes via a focused ~10-min smoke test of the new Stage 0b pre-validation path instead — see `reports/e2e-004-phase-2-smoke.md` when it lands.
 
 ---
 

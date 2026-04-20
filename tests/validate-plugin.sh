@@ -209,6 +209,97 @@ AGGRESSIVE=$(grep -rl "CRITICAL!\|YOU MUST\|NEVER EVER\|IMPORTANT:" skills/ --in
 [ "$AGGRESSIVE" = "0" ] \
   && pass "No aggressive anti-patterns in skills" || warn "$AGGRESSIVE files with aggressive patterns"
 
+# ─── K. Bundled tech-spec-validator ───
+# ido4dev bundles @ido4/tech-spec-format as dist/tech-spec-validator.js for
+# fail-fast pre-validation in the ingest-spec skill. Same pattern ido4specs
+# and ido4shape use for their bundles. See docs/mcp-runtime-contract.md for
+# the contract this bundle is part of.
+
+echo ""
+echo "▸ Bundled tech-spec-validator"
+
+TECH_BUNDLE="$PLUGIN_ROOT/dist/tech-spec-validator.js"
+TECH_VERSION_FILE="$PLUGIN_ROOT/dist/.tech-spec-format-version"
+TECH_CHECKSUM_FILE="$PLUGIN_ROOT/dist/.tech-spec-format-checksum"
+
+if [ -f "$TECH_BUNDLE" ]; then
+  pass "tech-spec-validator bundle exists"
+else
+  fail "tech-spec-validator bundle missing (dist/tech-spec-validator.js)"
+fi
+
+if [ -f "$TECH_VERSION_FILE" ]; then
+  TECH_V=$(cat "$TECH_VERSION_FILE" | tr -d '[:space:]')
+  if echo "$TECH_V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    pass "tech-spec-format version marker valid (v$TECH_V)"
+  else
+    fail "tech-spec-format version marker malformed: '$TECH_V'"
+  fi
+else
+  fail "tech-spec-format version marker missing (dist/.tech-spec-format-version)"
+fi
+
+if [ -f "$TECH_BUNDLE" ]; then
+  if head -3 "$TECH_BUNDLE" | grep -q "@ido4/tech-spec-format v"; then
+    pass "tech-spec-validator bundle has version header"
+  else
+    fail "tech-spec-validator bundle missing version header"
+  fi
+fi
+
+if [ -f "$TECH_CHECKSUM_FILE" ]; then
+  pass "tech-spec-format checksum file exists"
+  if [ -f "$TECH_BUNDLE" ]; then
+    EXPECTED=$(cat "$TECH_CHECKSUM_FILE" | awk '{print $1}')
+    ACTUAL=$(shasum -a 256 "$TECH_BUNDLE" | awk '{print $1}')
+    if [ "$EXPECTED" = "$ACTUAL" ]; then
+      pass "tech-spec-validator checksum matches bundle (SHA-256 verified)"
+    else
+      fail "tech-spec-validator checksum MISMATCH — expected $EXPECTED, got $ACTUAL"
+    fi
+  fi
+else
+  warn "tech-spec-format checksum file missing"
+fi
+
+# Round-trip smoke test — bundle must parse our own fixture cleanly
+if command -v node &>/dev/null && [ -f "$TECH_BUNDLE" ]; then
+  EXAMPLE="$PLUGIN_ROOT/references/example-technical-spec.md"
+  if [ -f "$EXAMPLE" ]; then
+    if node "$TECH_BUNDLE" "$EXAMPLE" >/dev/null 2>&1; then
+      pass "tech-spec-validator executes successfully on example-technical-spec.md"
+    else
+      fail "tech-spec-validator execution failed on example-technical-spec.md"
+    fi
+    RESULT=$(node "$TECH_BUNDLE" "$EXAMPLE" 2>/dev/null)
+    if echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('valid') is True" 2>/dev/null; then
+      pass "example-technical-spec.md passes validation (round-trip clean)"
+    else
+      fail "example-technical-spec.md does NOT pass validation"
+    fi
+  else
+    warn "references/example-technical-spec.md missing — skipping round-trip smoke test"
+  fi
+fi
+
+# SessionStart hook must copy the bundle so skills/ingest-spec can invoke it
+if [ -f "hooks/hooks.json" ]; then
+  if grep -q "tech-spec-validator.js" hooks/hooks.json; then
+    pass "SessionStart copies tech-spec-validator.js to CLAUDE_PLUGIN_DATA"
+  else
+    fail "SessionStart does NOT copy tech-spec-validator.js — skills/ingest-spec pre-validation will fail"
+  fi
+fi
+
+# ingest-spec skill must reference the bundled validator
+if [ -f "skills/ingest-spec/SKILL.md" ]; then
+  if grep -q "tech-spec-validator.js" skills/ingest-spec/SKILL.md; then
+    pass "skills/ingest-spec references the bundled validator"
+  else
+    fail "skills/ingest-spec does NOT reference tech-spec-validator.js — pre-validation not wired"
+  fi
+fi
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

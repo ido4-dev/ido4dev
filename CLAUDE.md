@@ -65,6 +65,24 @@ The plugin doesn't bundle the MCP server. On first session start, a `SessionStar
 - The MCP server updates independently via npm version ranges
 - No build step — the plugin is pure markdown + configuration
 
+## Bundled tech-spec-validator
+
+`skills/ingest-spec` runs a fail-fast pre-check on the technical spec before calling `ingest_spec`. The check uses `@ido4/tech-spec-format`'s parser, shipped as a zero-dependency Node bundle at `dist/tech-spec-validator.js`. A `SessionStart` hook copies it to `${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` so the skill can invoke `node "${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js" <path>` without referencing the plugin install root.
+
+This matches the dual-bundle pattern already used by `ido4specs` and `ido4shape` (canonical doc: `~/dev-projects/ido4-suite/docs/release-architecture.md`). The bundle is version-locked:
+
+- `dist/tech-spec-validator.js` — the bundle (banner contains `@ido4/tech-spec-format v<X.Y.Z>`)
+- `dist/.tech-spec-format-version` — semver marker of the bundled version
+- `dist/.tech-spec-format-checksum` — SHA-256 of the bundle (verified in `tests/validate-plugin.sh`)
+
+**Manual bundle refresh:** `bash scripts/update-tech-spec-validator.sh 0.8.0` (npm) or `bash scripts/update-tech-spec-validator.sh ~/dev-projects/ido4` (local build). The script fetches/copies the bundle, smoke-tests it against `references/example-technical-spec.md`, and writes the version + checksum markers.
+
+**Automatic bundle refresh:** `.github/workflows/update-tech-spec-validator.yml` receives `repository_dispatch: tech-spec-format-published` from the ido4 monorepo's publish flow, opens an auto-PR with the updated bundle, and auto-merges patch/minor bumps. Major bumps open with `needs-review`. A weekly cron acts as a safety net. Requires `PAT` secret on this repo (for PR creation) and `IDO4DEV_DISPATCH_TOKEN` secret on the ido4 monorepo (for dispatch).
+
+**Release gate:** `scripts/release.sh` runs `check_bundle` in Layer 1 pre-flight: refuses to release if the bundle is missing or missing its version header, warns interactively on drift against npm (`--yes` flag skips the prompt).
+
+The purpose is to close the "parses upstream in `ido4specs:validate-spec` but fails downstream in `ido4dev:ingest-spec`" seam — same parser, same version on both sides of the trust boundary.
+
 ## Skill Conventions
 
 - Skills are in `skills/{name}/SKILL.md` with YAML frontmatter

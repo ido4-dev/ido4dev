@@ -10,13 +10,14 @@
 set -euo pipefail
 
 DRY_RUN=false
+YES_FLAG=false
 args=()
 for arg in "$@"; do
-  if [ "$arg" = "--dry-run" ]; then
-    DRY_RUN=true
-  else
-    args+=("$arg")
-  fi
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    --yes) YES_FLAG=true ;;
+    *) args+=("$arg") ;;
+  esac
 done
 BUMP_TYPE="${args[0]:-patch}"
 MESSAGE="${args[1]:-Release}"
@@ -58,6 +59,61 @@ if [ -n "$UNTRACKED" ]; then
   exit 1
 fi
 echo "Pre-flight: clean working tree ✓"
+
+# ─── Pre-flight: Bundle Validation ─────────────────────────
+#
+# ido4dev ships the @ido4/tech-spec-format validator bundled in dist/ so
+# skills/ingest-spec can fail-fast on structural errors before calling the
+# ingest_spec MCP tool. This mirrors the ido4specs/ido4shape dual-bundle
+# pattern. The bundle must be present, have a version header, and be at
+# or near the latest on npm. Release refuses to proceed if the bundle is
+# missing or malformed; drift against npm is a warning (--yes auto-confirms).
+
+check_bundle() {
+  local label="$1"
+  local bundle_file="$2"
+  local version_file="$3"
+  local npm_package="$4"
+  local header_match="$5"
+
+  if [ ! -f "$bundle_file" ]; then
+    echo "ERROR: $bundle_file not found."
+    echo "Run: scripts/update-${label}-validator.sh <version>"
+    exit 1
+  fi
+
+  if ! head -3 "$bundle_file" | grep -q "$header_match"; then
+    echo "ERROR: $bundle_file missing version header — not a valid bundle"
+    exit 1
+  fi
+
+  local bundled_version
+  bundled_version=$(cat "$version_file" 2>/dev/null || echo "unknown")
+  local latest_npm
+  latest_npm=$(npm view "$npm_package" version 2>/dev/null || echo "unknown")
+
+  if [ "$bundled_version" != "$latest_npm" ] && [ "$latest_npm" != "unknown" ]; then
+    echo "WARNING: Bundled $label is v$bundled_version, latest on npm is v$latest_npm"
+    echo "Consider running: scripts/update-${label}-validator.sh $latest_npm"
+    if [ "$YES_FLAG" = "true" ]; then
+      echo "  --yes flag: proceeding despite validator drift"
+    else
+      read -p "Continue anyway? [y/N] " -n 1 -r
+      echo
+      [[ $REPLY =~ ^[Yy]$ ]] || exit 1
+    fi
+  fi
+
+  echo "Pre-flight: $label v$bundled_version ✓"
+}
+
+check_bundle "tech-spec" \
+  "$REPO_ROOT/dist/tech-spec-validator.js" \
+  "$REPO_ROOT/dist/.tech-spec-format-version" \
+  "@ido4/tech-spec-format" \
+  "@ido4/tech-spec-format v"
+
+echo ""
 
 # ─── Pre-flight: Local vs remote sync ────────────────────
 

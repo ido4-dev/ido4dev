@@ -2,7 +2,7 @@
 name: ingest-spec
 description: Ingest a validated technical spec into GitHub — preview the issue mapping under the project's methodology, then create issues on explicit user approval
 user-invocable: true
-allowed-tools: mcp__plugin_ido4dev_ido4__*, Read, Glob, Grep
+allowed-tools: mcp__plugin_ido4dev_ido4__*, Read, Glob, Grep, Bash(node *)
 ---
 
 You bridge a validated technical spec (produced by `/ido4specs:validate-spec` or any equivalent authoring flow) to the project's GitHub issues under its chosen methodology. You preview the mapping via `ingest_spec` with `dryRun: true`, wait for explicit user approval, then run `dryRun: false` to create the issues.
@@ -57,6 +57,26 @@ Check for `.ido4/project-info.json`. If it does not exist, output:
 > The spec is ready but this ido4 project isn't initialized yet (no `.ido4/project-info.json`). Run `/ido4dev:onboard` to initialize — or set up the methodology choice manually — then re-run `/ido4dev:ingest-spec {spec-path}`.
 
 Then STOP. Do NOT initialize the project yourself — methodology choice is a user decision.
+
+---
+
+## Stage 0b: Bundled-Validator Pre-Check
+
+Before calling the MCP ingestion tool, run the bundled `tech-spec-validator.js` locally to fail fast on structural errors. The validator is a zero-dependency Node CLI that ships with the plugin and is copied to `${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` by the `SessionStart` hook. This is defense in depth — same parser ido4specs used upstream, same result — so format drift between the two plugins is caught before an MCP tool call is made.
+
+Run:
+
+```bash
+node "${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js" <spec-path>
+```
+
+The validator prints a JSON object to stdout with shape `{valid, meta, metrics, project, groups, errors, warnings}`.
+
+**If `valid: true`:** report a concise one-liner ("Structural validation passed: N capabilities, M tasks") and proceed to Stage 1.
+
+**If `valid: false`:** present the errors with task refs and stop. Tell the user to fix the spec upstream (via `/ido4specs:refine-spec` or another `/ido4specs:validate-spec` pass) and re-run. Do NOT proceed to `ingest_spec` — passing a malformed spec to the ingestion pipeline wastes a tool call and produces a confusing error that originates from a different layer than the root cause.
+
+**If the bundled validator is unavailable** (`${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` missing, `node` not in PATH, or the copy step failed silently): report the problem once, note that the pre-check is being skipped, and proceed to Stage 1. The MCP tool will still structurally validate the spec; the pre-check just fails slower.
 
 ---
 

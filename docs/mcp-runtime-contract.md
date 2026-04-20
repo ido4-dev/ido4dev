@@ -17,6 +17,32 @@ After the Phase 9 ido4specs extraction (2026-04-15), `ido4dev` is the **sole run
 
 ---
 
+## Bundled tech-spec-validator (added 2026-04-20)
+
+Beyond the MCP runtime itself, `ido4dev` now also bundles a zero-dependency parser for technical specs. This is a **separate** vendored artifact from `@ido4/tech-spec-format` — tracked under suite-level interface contract #6 (technical spec format), not contract #5.
+
+Bundle surface:
+
+| File | Purpose |
+|---|---|
+| `dist/tech-spec-validator.js` | The parser bundle (zero-dependency Node CLI). Banner line declares `@ido4/tech-spec-format v<X.Y.Z>` |
+| `dist/.tech-spec-format-version` | Semver marker of the bundled version |
+| `dist/.tech-spec-format-checksum` | SHA-256 of the bundle file, verified by `tests/validate-plugin.sh` |
+
+Consumer: `skills/ingest-spec` runs `node "${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js" <spec-path>` in Stage 0b (pre-validation) before calling `ingest_spec`. The `SessionStart` hook copies the bundle from `${CLAUDE_PLUGIN_ROOT}/dist/` to `${CLAUDE_PLUGIN_DATA}/` so the skill can invoke it without referencing the plugin install root.
+
+Release coordination:
+- **Manual refresh:** `bash scripts/update-tech-spec-validator.sh <version>` — fetches the bundle from npm (or a local `~/dev-projects/ido4` build), smoke-tests it against `references/example-technical-spec.md`, writes the version + checksum markers.
+- **Automatic refresh:** `.github/workflows/update-tech-spec-validator.yml` listens for `repository_dispatch: tech-spec-format-published` from the ido4 monorepo's publish workflow; a weekly cron acts as safety net. Patch/minor auto-merge; major bumps open with `needs-review`.
+- **Release gate:** `scripts/release.sh` `check_bundle` Layer-1 pre-flight refuses to release if the bundle is missing/malformed; warns on drift against npm's latest.
+
+**What counts as breaking for this bundle:**
+- Removing `dist/tech-spec-validator.js` without replacing the pre-validation path in `skills/ingest-spec`
+- Renaming the file or its path (breaks the SessionStart copy + skill invocation)
+- Shipping a bundle whose parser output shape diverges from `@ido4/core`'s installed `@ido4/tech-spec-format` (the skew the bundle is designed to prevent — belt-and-suspenders must agree)
+
+**Canonical pattern reference:** `~/dev-projects/ido4-suite/docs/release-architecture.md` (four-layer pipeline, Layer-1 bundle pre-flight, dispatch coordination).
+
 ## The criticalTools surface
 
 The contract surface is defined by the `criticalTools` allowlist in `~/dev-projects/ido4dev/tests/compatibility.mjs`. Tools on this list must exist with stable names, parameter signatures, and response shapes for `ido4dev` to function.

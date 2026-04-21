@@ -46,11 +46,32 @@
         ]
       },
       {
-        "matcher": "mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)",
+        "matcher": "^mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)$",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "A task was just assigned to a container. Based on the tool result, check:\n\n1. Does the result indicate any integrity concerns? (tasks from same capability in different containers)\n2. Does the result indicate any dependency issues? (task depends on work in a later container)\n\nRespond with JSON: {\"decision\": \"block\", \"reason\": \"[concern]\"} ONLY if there's a governance risk. Otherwise {\"decision\": \"allow\"}.\n\nOnly flag real concerns visible in the tool result, not hypothetical ones."
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/assign-task.rules.yaml\" || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_ido4dev_ido4__compute_compliance_score",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/compliance-score.rules.yaml\" || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_ido4dev_ido4__complete_and_handoff",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/complete-and-handoff.rules.yaml\" || true",
+            "timeout": 10
           }
         ]
       }

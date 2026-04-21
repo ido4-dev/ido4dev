@@ -1,0 +1,69 @@
+# Rules for PostToolUse on mcp__plugin_ido4dev_ido4__complete_and_handoff.
+#
+# Signals used (all native on HandoffResult, verified against
+# ~/dev-projects/ido4/packages/core/src/domains/distribution/work-distribution-service.ts):
+#   - completed.issueNumber / completed.title
+#   - newlyUnblocked[]: { issueNumber, title, recommendedAgent, reasoning }
+#   - agentNextTask.recommendation.{issueNumber, title, score, reasoning, scoreBreakdown}
+#   - scoreBreakdown: { cascadeValue (0-40), epicMomentum (0-25),
+#                       capabilityMatch (0-20), dependencyFreshness (0-15) }
+#
+# Thesis framing: task completion is where *momentum* either builds or is
+# lost. The tool returns structured downstream impact info; without rules
+# surfacing it, agents and humans would have to parse it out manually.
+# These rules make momentum visible at the moment it matters.
+#
+# Rules that did NOT earn their slot (cut during design audit):
+#   - "no next task available" — the empty recommendation IS the signal;
+#     a rule re-announcing it adds noise, not information.
+
+version: 1
+event: PostToolUse
+matcher: mcp__plugin_ido4dev_ido4__complete_and_handoff
+hit_policy: collect
+
+rules:
+  # CH001 — Completing this task unblocked downstream work.
+  # The system knows the dependency graph; this rule surfaces the specific
+  # tasks that are now ready. Operationalizes institutional memory: the
+  # agent/human doesn't have to reconstruct "what's ready now."
+  - id: CH001_cascade_unblock
+    when: "Array.isArray(tool_response.newlyUnblocked) && tool_response.newlyUnblocked.length > 0"
+    profiles: [hydro, scrum, shapeup]
+    severity: info
+    emit:
+      title: "Completing #{{ tool_response.completed.issueNumber }} unblocks {{ tool_response.newlyUnblocked.length }} downstream task(s)"
+      body: |
+        Newly ready to start:
+        {{#tool_response.newlyUnblocked}}
+        - #{{ issueNumber }} {{{ title }}} — {{{ reasoning }}}{{#recommendedAgent}} (recommended: {{{ recommendedAgent }}}){{/recommendedAgent}}
+        {{/tool_response.newlyUnblocked}}
+      cta: "Consider picking one up to preserve momentum — these were blocked on #{{ tool_response.completed.issueNumber }}."
+
+  # CH002 — The system recommends a specific next task with non-trivial
+  # downstream leverage. Surfaces the *reasoning* (cascadeValue, momentum,
+  # capability-match) so the agent/human understands WHY this is the right
+  # next task, not just that something was recommended. Threshold:
+  # cascadeValue ≥ 15 OR epicMomentum ≥ 15 — meaningful leverage in at
+  # least one dimension. Silence when the recommendation is weak/neutral.
+  - id: CH002_strong_next_recommendation
+    when: |
+      tool_response.agentNextTask &&
+      tool_response.agentNextTask.recommendation &&
+      tool_response.agentNextTask.recommendation.scoreBreakdown &&
+      (
+        tool_response.agentNextTask.recommendation.scoreBreakdown.cascadeValue >= 15 ||
+        tool_response.agentNextTask.recommendation.scoreBreakdown.epicMomentum >= 15
+      )
+    profiles: [hydro, scrum, shapeup]
+    severity: info
+    emit:
+      title: "Recommended next: #{{ tool_response.agentNextTask.recommendation.issueNumber }} {{{ tool_response.agentNextTask.recommendation.title }}} (score {{ tool_response.agentNextTask.recommendation.score }})"
+      body: |
+        {{{ tool_response.agentNextTask.recommendation.reasoning }}}
+
+        Why this is the right next task:
+        - cascade leverage: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.cascadeValue }}/40
+        - epic momentum: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.epicMomentum }}/25
+        - capability match: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.capabilityMatch }}/20
+        - dependency freshness: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.dependencyFreshness }}/15

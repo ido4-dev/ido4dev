@@ -46,6 +46,40 @@ function assertArrayEq(actual, expected, label) {
   }
 }
 
+// Shallow-check that `actual` contains every key/value from `expected` at
+// each level. Used for `state_after_merge` assertions — we don't assert
+// EXACT state equality, just that the expected fields match. Primitive
+// values compared with ===; arrays compared JSON-stringified; objects
+// compared recursively.
+function assertContains(actual, expected, label) {
+  if (expected === null || typeof expected !== 'object' || Array.isArray(expected)) {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+    return;
+  }
+  if (actual === null || typeof actual !== 'object' || Array.isArray(actual)) {
+    throw new Error(`${label}: expected object, got ${JSON.stringify(actual)}`);
+  }
+  for (const k of Object.keys(expected)) {
+    assertContains(actual[k], expected[k], `${label}.${k}`);
+  }
+}
+
+// Apply the runner's stateMutations to a state object, mirroring the
+// runFromStdin write semantics: last_rule_fires merges, other keys overwrite.
+function applyStateMutations(stateIn, mutations) {
+  const out = { ...stateIn };
+  if (mutations.last_rule_fires) {
+    out.last_rule_fires = { ...(stateIn.last_rule_fires || {}), ...mutations.last_rule_fires };
+  }
+  for (const k of Object.keys(mutations)) {
+    if (k === 'last_rule_fires') continue;
+    out[k] = mutations[k];
+  }
+  return out;
+}
+
 function runCase(rulesDir, testCase, ruleFile) {
   const name = testCase.name || '(unnamed)';
   try {
@@ -53,6 +87,16 @@ function runCase(rulesDir, testCase, ruleFile) {
       hook_event_name: 'PostToolUse',
       tool_input: testCase.input && testCase.input.tool_input ? testCase.input.tool_input : {},
       tool_response: testCase.input && testCase.input.tool_response ? testCase.input.tool_response : {},
+      tool_name: (testCase.input && testCase.input.tool_name) || undefined,
+    };
+
+    // state_before lets a fixture seed prior-session state (e.g., a grade baseline).
+    const initialState = {
+      version: 1,
+      last_compliance: null,
+      last_rule_fires: {},
+      open_findings: [],
+      ...(testCase.state_before || {}),
     };
 
     const result = runner.evaluate({
@@ -60,9 +104,7 @@ function runCase(rulesDir, testCase, ruleFile) {
       event,
       profile: testCase.profile || null,
       profileValues: testCase.profile_values || {},
-      state: runner.evaluate.__emptyState
-        ? runner.evaluate.__emptyState()
-        : { version: 1, last_compliance: null, last_rule_fires: {}, open_findings: [] },
+      state: initialState,
       now: testCase.now_ms || Date.parse('2026-04-21T12:00:00Z'),
     });
 
@@ -97,6 +139,14 @@ function runCase(rulesDir, testCase, ruleFile) {
           throw new Error(`${fieldKey}: expected to contain "${expected[expKey]}", got "${val.slice(0, 120)}..."`);
         }
       }
+    }
+
+    // state_after_merge: after the runner applies stateMutations, assert the
+    // state contains these fields. Partial match — fields not mentioned are
+    // unchecked.
+    if (expected.state_after_merge) {
+      const finalState = applyStateMutations(initialState, result.stateMutations);
+      assertContains(finalState, expected.state_after_merge, 'state_after_merge');
     }
 
     ok(name);

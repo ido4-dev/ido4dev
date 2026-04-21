@@ -26,8 +26,18 @@
 //     rule needs cross-session event queries).
 //
 // Trust boundary: rule files are authored by plugin maintainers and reviewed
-// in-tree. `when:` expressions run via `new Function(...)` — not a generic
-// eval surface. Do NOT accept user-supplied rule files without sandboxing.
+// in-tree. `when:` expressions and `post_evaluation.persist` expressions run
+// via `new Function(...)` — not a generic eval surface. Do NOT accept
+// user-supplied rule files without sandboxing.
+//
+// State writes (Stage 4):
+//   Rule files can declare a top-level `post_evaluation.persist` block. Each
+//   key is a state field to write; each value is a JS expression evaluated
+//   against the same context as `when:` (plus `now_iso` / `now_ms` helpers).
+//   The result is written to state[key] (overwrite semantics — the new value
+//   replaces the old). This is how rules advance the baselines that other
+//   rules diff against (e.g., last_compliance for grade-drop detection).
+//   `last_rule_fires` remains merge-semantics (per-fire debounce timestamps).
 
 'use strict';
 
@@ -95,6 +105,22 @@ function validateRuleFile(doc, filePath) {
       throw new Error(`Rule file ${filePath}: rule ${r.id} "escalate_mode" must be "additionalContext" or "direct"`);
     }
   }
+  if (doc.post_evaluation !== undefined) {
+    if (!doc.post_evaluation || typeof doc.post_evaluation !== 'object' || Array.isArray(doc.post_evaluation)) {
+      throw new Error(`Rule file ${filePath}: "post_evaluation" must be a mapping`);
+    }
+    if (doc.post_evaluation.persist !== undefined) {
+      const persist = doc.post_evaluation.persist;
+      if (!persist || typeof persist !== 'object' || Array.isArray(persist)) {
+        throw new Error(`Rule file ${filePath}: "post_evaluation.persist" must be a mapping`);
+      }
+      for (const [key, expr] of Object.entries(persist)) {
+        if (typeof expr !== 'string' || expr.length === 0) {
+          throw new Error(`Rule file ${filePath}: post_evaluation.persist["${key}"] must be a non-empty JS expression string`);
+        }
+      }
+    }
+  }
 }
 
 function loadProfile(profilePath) {
@@ -114,22 +140,28 @@ function loadProfile(profilePath) {
 // ────────────────────────────────────────────────────────────────
 // Expression evaluation
 
-// Evaluate a `when:` expression against a context object. Returns
-// { value, error }. Expression runs via `new Function` in sloppy mode so
-// `with(ctx)` lifts context fields as identifiers.
+// Evaluate a JS expression against a context object. Returns { value, error }.
+// Expression runs via `new Function` in sloppy mode so `with(ctx)` lifts
+// context fields as identifiers. Returns the raw expression value — used by
+// post_evaluation.persist to persist arbitrary shapes.
 //
 // Scope: the context object ONLY. Globals reachable via constructor chains are
 // not blocked; see trust-boundary note at the top of the file. Do NOT use this
 // with user-supplied expressions.
-function evalWhen(expr, ctx) {
+function evalExpr(expr, ctx) {
   try {
     // eslint-disable-next-line no-new-func
     const fn = new Function('ctx', `with (ctx) { return (${expr}); }`);
-    const result = fn(ctx);
-    return { value: !!result };
+    return { value: fn(ctx) };
   } catch (e) {
-    return { value: false, error: e.message };
+    return { value: undefined, error: e.message };
   }
+}
+
+// Evaluate a `when:` expression and coerce to boolean. Wraps evalExpr.
+function evalWhen(expr, ctx) {
+  const r = evalExpr(expr, ctx);
+  return { value: !!r.value, error: r.error };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -194,6 +226,7 @@ function shouldDebounce(rule, ctx, stateIn, now) {
 // Core evaluation — pure function, no I/O
 
 function evaluate({ ruleFile, event, profile, profileValues, state: currentState, now }) {
+  const nowMs = typeof now === 'number' ? now : Date.now();
   const ctx = {
     tool_input: (event && event.tool_input) || {},
     tool_response: (event && event.tool_response) || {},
@@ -201,6 +234,8 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
     profile_values: profileValues || {},
     state: currentState || state.emptyState(),
     event: event || {},
+    now_ms: nowMs,
+    now_iso: new Date(nowMs).toISOString(),
   };
 
   const hitPolicy = ruleFile.hit_policy || DEFAULT_HIT_POLICY;
@@ -218,7 +253,7 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
     }
     if (!value) continue;
 
-    const { debounced, key } = shouldDebounce(rule, ctx, ctx.state, now);
+    const { debounced, key } = shouldDebounce(rule, ctx, ctx.state, nowMs);
     if (debounced) continue;
 
     const emit = renderEmit(rule.emit, ctx);
@@ -236,13 +271,29 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
       });
     }
 
-    if (key) stateMutations.last_rule_fires[key] = new Date(now).toISOString();
+    if (key) stateMutations.last_rule_fires[key] = new Date(nowMs).toISOString();
 
     if (hitPolicy === 'first') break;
   }
 
   if (hitPolicy === 'unique' && findings.length > 1) {
     warn(`hit_policy "unique" produced ${findings.length} findings in ${ruleFile.matcher || 'rule file'}`);
+  }
+
+  // post_evaluation.persist — always runs after rule evaluation regardless of
+  // which rules fired. Each persist value is a JS expression; its result is
+  // recorded as an overwrite mutation for the named state key. Errors are
+  // warned and skipped; undefined results are skipped (no-op, not a write).
+  if (ruleFile.post_evaluation && ruleFile.post_evaluation.persist) {
+    for (const [key, expr] of Object.entries(ruleFile.post_evaluation.persist)) {
+      const r = evalExpr(expr, ctx);
+      if (r.error) {
+        warn(`post_evaluation.persist["${key}"]: expression error — ${r.error}`);
+        continue;
+      }
+      if (r.value === undefined) continue;
+      stateMutations[key] = r.value;
+    }
   }
 
   return { findings, escalate, stateMutations };
@@ -313,10 +364,17 @@ async function runFromStdin({ ruleFilePath, profilePath, stateFilePath, now = Da
     now,
   });
 
-  if (stateFilePath && Object.keys(result.stateMutations.last_rule_fires).length > 0) {
+  const hasFireMutations = Object.keys(result.stateMutations.last_rule_fires).length > 0;
+  const persistKeys = Object.keys(result.stateMutations).filter((k) => k !== 'last_rule_fires');
+  if (stateFilePath && (hasFireMutations || persistKeys.length > 0)) {
     try {
       state.update(stateFilePath, (s) => {
+        // last_rule_fires is merged (each per-rule fire timestamp accumulates).
         s.last_rule_fires = { ...s.last_rule_fires, ...result.stateMutations.last_rule_fires };
+        // post_evaluation.persist keys overwrite — the new snapshot replaces the baseline.
+        for (const key of persistKeys) {
+          s[key] = result.stateMutations[key];
+        }
         return s;
       });
     } catch (e) {
@@ -367,6 +425,7 @@ module.exports = {
   evaluate,
   filterByProfile,
   evalWhen,
+  evalExpr,
   renderString,
   renderEmit,
   shouldDebounce,

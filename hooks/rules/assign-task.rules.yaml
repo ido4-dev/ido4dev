@@ -1,0 +1,52 @@
+# Rules for PostToolUse on the assign_task_to_* tool family.
+#
+# Matcher covers all three methodology-specific tools via regex:
+#   mcp__plugin_ido4dev_ido4__assign_task_to_wave   (Hydro)
+#   mcp__plugin_ido4dev_ido4__assign_task_to_sprint (Scrum)
+#   mcp__plugin_ido4dev_ido4__assign_task_to_cycle  (Shape Up)
+#
+# Per Research A, each tool is only REGISTERED on the MCP server when
+# its container type is active in the project's methodology profile —
+# so `assign_task_to_sprint` doesn't exist in a Hydro project. The
+# regex matcher is a convenience, not a polymorphism requirement.
+#
+# Signals used (all native on ContainerAssignResult, verified against
+# ~/dev-projects/ido4/packages/core/src/container/interfaces.ts:283-287):
+#   - issueNumber: number
+#   - container: string
+#   - integrity: { maintained: boolean, violations: string[] }
+#
+# Thesis framing: AI agents (and humans) will sometimes assign tasks to
+# containers without noticing that sibling tasks from the same epic are
+# in a different container. This is exactly the class of mistake
+# institutional memory catches — the BRE's IntegrityValidator records
+# epic-container relationships; this rule surfaces violations at the
+# moment of the assignment attempt.
+
+version: 1
+event: PostToolUse
+# Regex matcher — string contains parens/pipes so Claude Code evaluates it
+# as a JavaScript regex. Anchored for safety per research findings.
+matcher: "^mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)$"
+hit_policy: collect
+
+rules:
+  # AT001 — Integrity violation on assignment.
+  # Fires when the BRE says assigning this task to the named container
+  # would break epic-container consistency (splitting an epic across
+  # containers, assigning to a container that conflicts with siblings).
+  # The violations[] list is authored by IntegrityValidator in @ido4/core
+  # and is safe to pass through verbatim.
+  - id: AT001_integrity_violation
+    when: "tool_response.integrity && tool_response.integrity.maintained === false"
+    profiles: [hydro, scrum, shapeup]
+    severity: warning
+    emit:
+      title: "Assignment integrity violation: #{{ tool_response.issueNumber }} → {{{ tool_response.container }}}"
+      body: |
+        The BRE flagged this assignment as breaking epic-container consistency.
+        Violations:
+        {{#tool_response.integrity.violations}}
+        - {{{ . }}}
+        {{/tool_response.integrity.violations}}
+      cta: "Review the sibling tasks' containers before proceeding. This mistake tends to cascade — epic rollups get split and progress tracking becomes unreliable."

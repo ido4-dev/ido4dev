@@ -1,0 +1,292 @@
+# Test fixtures for compliance-score.rules.yaml.
+#
+# Exercises stateful diffs via state_before + state_after_merge. First fixture
+# set in the project to cover the post_evaluation.persist code path.
+
+rule_file: compliance-score.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # CS001 — Grade drop
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: grade A → C fires CS001 with PM escalation"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "A"
+        score: 92
+        categories:
+          brePassRate: { score: 95, weight: 0.3, contribution: 28.5, detail: "strong" }
+          qualityGates: { score: 90, weight: 0.2, contribution: 18, detail: "strong" }
+          processAdherence: { score: 92, weight: 0.2, contribution: 18.4, detail: "strong" }
+          containerIntegrity: { score: 93, weight: 0.15, contribution: 13.95, detail: "strong" }
+          flowEfficiency: { score: 91, weight: 0.15, contribution: 13.65, detail: "strong" }
+    input:
+      tool_input: {}
+      tool_response:
+        score: 65
+        grade: "C"
+        period: { since: "2026-04-01", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 68, weight: 0.3, contribution: 20.4, detail: "several BRE failures this period" }
+          qualityGates: { score: 62, weight: 0.2, contribution: 12.4, detail: "open gates" }
+          processAdherence: { score: 70, weight: 0.2, contribution: 14, detail: "ok" }
+          containerIntegrity: { score: 65, weight: 0.15, contribution: 9.75, detail: "one epic split" }
+          flowEfficiency: { score: 60, weight: 0.15, contribution: 9, detail: "slow review cycle" }
+        summary: "Significant slippage across BRE and quality gates this period."
+        recommendations: ["Investigate BRE failures", "Close open quality gates"]
+        metadata: { totalTransitions: 48, totalTasks: 30, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: [CS001_grade_drop, CS002_category_threshold_crossed]
+      state_after_merge:
+        last_compliance:
+          grade: "C"
+          score: 65
+
+  - name: "scrum: grade B → F fires CS001"
+    profile: scrum
+    state_before:
+      last_compliance:
+        grade: "B"
+        score: 82
+        categories:
+          brePassRate: { score: 85, weight: 0.25, contribution: 21.25, detail: "" }
+          qualityGates: { score: 80, weight: 0.25, contribution: 20, detail: "" }
+          processAdherence: { score: 83, weight: 0.2, contribution: 16.6, detail: "" }
+          containerIntegrity: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+          flowEfficiency: { score: 82, weight: 0.15, contribution: 12.3, detail: "" }
+    input:
+      tool_response:
+        score: 42
+        grade: "F"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 40, weight: 0.25, contribution: 10, detail: "failing" }
+          qualityGates: { score: 45, weight: 0.25, contribution: 11.25, detail: "failing" }
+          processAdherence: { score: 50, weight: 0.2, contribution: 10, detail: "failing" }
+          containerIntegrity: { score: 40, weight: 0.15, contribution: 6, detail: "failing" }
+          flowEfficiency: { score: 35, weight: 0.15, contribution: 5.25, detail: "failing" }
+        summary: "Severe compliance breakdown"
+        recommendations: ["Emergency review required"]
+        metadata: { totalTransitions: 12, totalTasks: 8, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: [CS001_grade_drop, CS002_category_threshold_crossed]
+
+  # ────────────────────────────────────────────────────────────────
+  # CS001 negative — grade UP or STABLE does not fire
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "grade improvement (C → B) does NOT fire CS001"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "C"
+        score: 65
+        categories:
+          brePassRate: { score: 65, weight: 0.3, contribution: 19.5, detail: "" }
+          qualityGates: { score: 62, weight: 0.2, contribution: 12.4, detail: "" }
+          processAdherence: { score: 70, weight: 0.2, contribution: 14, detail: "" }
+          containerIntegrity: { score: 66, weight: 0.15, contribution: 9.9, detail: "" }
+          flowEfficiency: { score: 63, weight: 0.15, contribution: 9.45, detail: "" }
+    input:
+      tool_response:
+        score: 82
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 80, weight: 0.3, contribution: 24, detail: "" }
+          qualityGates: { score: 85, weight: 0.2, contribution: 17, detail: "" }
+          processAdherence: { score: 82, weight: 0.2, contribution: 16.4, detail: "" }
+          containerIntegrity: { score: 84, weight: 0.15, contribution: 12.6, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+        summary: "Recovery"
+        recommendations: []
+        metadata: { totalTransitions: 20, totalTasks: 15, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+      state_after_merge:
+        last_compliance:
+          grade: "B"
+          score: 82
+
+  - name: "stable grade (B → B, no category crossing) fires nothing"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "B"
+        score: 82
+        categories:
+          brePassRate: { score: 85, weight: 0.3, contribution: 25.5, detail: "" }
+          qualityGates: { score: 80, weight: 0.2, contribution: 16, detail: "" }
+          processAdherence: { score: 82, weight: 0.2, contribution: 16.4, detail: "" }
+          containerIntegrity: { score: 83, weight: 0.15, contribution: 12.45, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+    input:
+      tool_response:
+        score: 82
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 84, weight: 0.3, contribution: 25.2, detail: "" }
+          qualityGates: { score: 81, weight: 0.2, contribution: 16.2, detail: "" }
+          processAdherence: { score: 82, weight: 0.2, contribution: 16.4, detail: "" }
+          containerIntegrity: { score: 83, weight: 0.15, contribution: 12.45, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+        summary: "Steady"
+        recommendations: []
+        metadata: { totalTransitions: 18, totalTasks: 12, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+
+  - name: "first-ever measurement (no prior state) fires nothing, just sets baseline"
+    profile: shapeup
+    state_before: {}
+    input:
+      tool_response:
+        score: 75
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 78, weight: 0.2, contribution: 15.6, detail: "" }
+          qualityGates: { score: 75, weight: 0.2, contribution: 15, detail: "" }
+          processAdherence: { score: 72, weight: 0.2, contribution: 14.4, detail: "" }
+          containerIntegrity: { score: 74, weight: 0.2, contribution: 14.8, detail: "" }
+          flowEfficiency: { score: 77, weight: 0.2, contribution: 15.4, detail: "" }
+        summary: "First baseline"
+        recommendations: []
+        metadata: { totalTransitions: 10, totalTasks: 7, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+      state_after_merge:
+        last_compliance:
+          grade: "B"
+          score: 75
+
+  # ────────────────────────────────────────────────────────────────
+  # CS002 — Category threshold crossing (downward)
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "single category crossed: qualityGates 80 → 65 fires CS002 (grade stable)"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "B"
+        score: 82
+        categories:
+          brePassRate: { score: 90, weight: 0.3, contribution: 27, detail: "" }
+          qualityGates: { score: 80, weight: 0.2, contribution: 16, detail: "" }
+          processAdherence: { score: 85, weight: 0.2, contribution: 17, detail: "" }
+          containerIntegrity: { score: 82, weight: 0.15, contribution: 12.3, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+    input:
+      tool_response:
+        score: 78
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 90, weight: 0.3, contribution: 27, detail: "" }
+          qualityGates: { score: 65, weight: 0.2, contribution: 13, detail: "new open gates" }
+          processAdherence: { score: 85, weight: 0.2, contribution: 17, detail: "" }
+          containerIntegrity: { score: 82, weight: 0.15, contribution: 12.3, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+        summary: "quality gates slipping"
+        recommendations: []
+        metadata: { totalTransitions: 20, totalTasks: 15, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: [CS002_category_threshold_crossed]
+      severity: warning
+
+  - name: "steady-weak category (was <70, still <70) does NOT fire CS002 again"
+    profile: scrum
+    state_before:
+      last_compliance:
+        grade: "C"
+        score: 65
+        categories:
+          brePassRate: { score: 65, weight: 0.25, contribution: 16.25, detail: "" }
+          qualityGates: { score: 60, weight: 0.25, contribution: 15, detail: "was already low" }
+          processAdherence: { score: 70, weight: 0.2, contribution: 14, detail: "" }
+          containerIntegrity: { score: 72, weight: 0.15, contribution: 10.8, detail: "" }
+          flowEfficiency: { score: 68, weight: 0.15, contribution: 10.2, detail: "" }
+    input:
+      tool_response:
+        score: 65
+        grade: "C"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 65, weight: 0.25, contribution: 16.25, detail: "" }
+          qualityGates: { score: 58, weight: 0.25, contribution: 14.5, detail: "still low" }
+          processAdherence: { score: 70, weight: 0.2, contribution: 14, detail: "" }
+          containerIntegrity: { score: 72, weight: 0.15, contribution: 10.8, detail: "" }
+          flowEfficiency: { score: 68, weight: 0.15, contribution: 10.2, detail: "" }
+        summary: "still struggling"
+        recommendations: []
+        metadata: { totalTransitions: 15, totalTasks: 10, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+
+  - name: "recovery across threshold (was <70, now ≥70) does NOT fire CS002"
+    profile: shapeup
+    state_before:
+      last_compliance:
+        grade: "C"
+        score: 65
+        categories:
+          brePassRate: { score: 60, weight: 0.2, contribution: 12, detail: "low" }
+          qualityGates: { score: 72, weight: 0.2, contribution: 14.4, detail: "" }
+          processAdherence: { score: 70, weight: 0.2, contribution: 14, detail: "" }
+          containerIntegrity: { score: 65, weight: 0.2, contribution: 13, detail: "low" }
+          flowEfficiency: { score: 68, weight: 0.2, contribution: 13.6, detail: "low" }
+    input:
+      tool_response:
+        score: 82
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 82, weight: 0.2, contribution: 16.4, detail: "recovered" }
+          qualityGates: { score: 85, weight: 0.2, contribution: 17, detail: "" }
+          processAdherence: { score: 80, weight: 0.2, contribution: 16, detail: "" }
+          containerIntegrity: { score: 78, weight: 0.2, contribution: 15.6, detail: "recovered" }
+          flowEfficiency: { score: 80, weight: 0.2, contribution: 16, detail: "recovered" }
+        summary: "Strong recovery"
+        recommendations: []
+        metadata: { totalTransitions: 20, totalTasks: 15, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # post_evaluation.persist — baseline always advances
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "persist advances baseline even when no rules fire"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "B"
+        score: 82
+        categories:
+          brePassRate: { score: 85, weight: 0.3, contribution: 25.5, detail: "" }
+          qualityGates: { score: 80, weight: 0.2, contribution: 16, detail: "" }
+          processAdherence: { score: 82, weight: 0.2, contribution: 16.4, detail: "" }
+          containerIntegrity: { score: 83, weight: 0.15, contribution: 12.45, detail: "" }
+          flowEfficiency: { score: 80, weight: 0.15, contribution: 12, detail: "" }
+    input:
+      tool_response:
+        score: 85
+        grade: "B"
+        period: { since: "2026-04-15", until: "2026-04-21" }
+        categories:
+          brePassRate: { score: 88, weight: 0.3, contribution: 26.4, detail: "" }
+          qualityGates: { score: 82, weight: 0.2, contribution: 16.4, detail: "" }
+          processAdherence: { score: 83, weight: 0.2, contribution: 16.6, detail: "" }
+          containerIntegrity: { score: 85, weight: 0.15, contribution: 12.75, detail: "" }
+          flowEfficiency: { score: 82, weight: 0.15, contribution: 12.3, detail: "" }
+        summary: "Improving within B"
+        recommendations: []
+        metadata: { totalTransitions: 18, totalTasks: 12, computedAt: "2026-04-21T12:00:00Z" }
+    expect:
+      fired: []
+      state_after_merge:
+        last_compliance:
+          grade: "B"
+          score: 85

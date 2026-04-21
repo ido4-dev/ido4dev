@@ -535,7 +535,7 @@ fi
 # No PostToolUse matcher should still use "type": "prompt" for matchers we've
 # migrated. Currently migrated: validate_transition. Extend this list as
 # Stage 4 rewrites land.
-MIGRATED_MATCHERS="validate_transition"
+MIGRATED_MATCHERS="validate_transition assign_task_to_ compute_compliance_score complete_and_handoff"
 if [ -f hooks/hooks.json ]; then
   PROMPT_VIOLATIONS=0
   for M in $MIGRATED_MATCHERS; do

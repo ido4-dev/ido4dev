@@ -1,0 +1,123 @@
+# Test fixtures for assign-task.rules.yaml.
+#
+# The regex matcher covers three tools; fixtures test all three with each
+# methodology. (In practice each tool only exists under its profile, but
+# the rule code path is identical — we exercise all three for coverage.)
+
+rule_file: assign-task.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # AT001 — Integrity violation (primary positive cases)
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro wave: integrity maintained=false fires AT001"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 2" }
+      tool_response:
+        issueNumber: 42
+        container: "Wave 2"
+        integrity:
+          maintained: false
+          violations:
+            - "Assigning task #42 to \"Wave 2\" would split epic \"Auth Rollout\" across containers: Wave 1, Wave 2"
+    expect:
+      fired: [AT001_integrity_violation]
+      severity: warning
+      title_contains: "#42 → Wave 2"
+      body_contains: "split epic"
+
+  - name: "scrum sprint: integrity maintained=false fires AT001"
+    profile: scrum
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_sprint"
+      tool_input: { issueNumber: 101, sprintName: "Sprint 6" }
+      tool_response:
+        issueNumber: 101
+        container: "Sprint 6"
+        integrity:
+          maintained: false
+          violations:
+            - "Task #101 belongs to epic \"Payments v2\" whose other tasks (#99, #100) are in Sprint 5"
+    expect:
+      fired: [AT001_integrity_violation]
+      title_contains: "#101 → Sprint 6"
+      body_contains: "Payments v2"
+
+  - name: "shapeup cycle: integrity maintained=false fires AT001"
+    profile: shapeup
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_cycle"
+      tool_input: { issueNumber: 7, cycleName: "Cycle 3" }
+      tool_response:
+        issueNumber: 7
+        container: "Cycle 3"
+        integrity:
+          maintained: false
+          violations:
+            - "Task #7 is a hill-climb scope of pitch \"Mobile Login\" whose other scopes are in Cycle 2"
+    expect:
+      fired: [AT001_integrity_violation]
+      body_contains: "hill-climb"
+
+  - name: "multiple violations render verbatim in body"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 50, waveName: "Wave 4" }
+      tool_response:
+        issueNumber: 50
+        container: "Wave 4"
+        integrity:
+          maintained: false
+          violations:
+            - "Violation 1: epic split"
+            - "Violation 2: ordering rule"
+            - "Violation 3: dependency forward"
+    expect:
+      fired: [AT001_integrity_violation]
+      body_contains: "Violation 3"
+
+  # ────────────────────────────────────────────────────────────────
+  # AT001 negative — integrity maintained
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "clean assignment (integrity.maintained=true) fires nothing"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 1" }
+      tool_response:
+        issueNumber: 42
+        container: "Wave 1"
+        integrity:
+          maintained: true
+          violations: []
+    expect:
+      fired: []
+
+  - name: "missing integrity object (defensive): silent"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 1" }
+      tool_response:
+        issueNumber: 42
+        container: "Wave 1"
+    expect:
+      fired: []
+
+  - name: "empty violations with maintained=true (idempotent response): silent"
+    profile: scrum
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_sprint"
+      tool_input: { issueNumber: 200, sprintName: "Sprint 7" }
+      tool_response:
+        issueNumber: 200
+        container: "Sprint 7"
+        integrity:
+          maintained: true
+          violations: []
+    expect:
+      fired: []

@@ -165,6 +165,19 @@ check('renderEmit preserves non-string fields', () => {
   assertEq(out.tags, ['a', 'B'], 'tags');
 });
 
+check('double-brace HTML-escapes (default Mustache) — documents the behavior so rule files choose triple where needed', () => {
+  const out = runner.renderString('{{ v }}', { v: 'Wave "2" & <x>' });
+  // If this ever stops HTML-escaping, our rule files using triple-brace
+  // become unnecessary and we should update the design doc. The regression
+  // signal here is that the test fails — intentional tripwire.
+  assertEq(out, 'Wave &quot;2&quot; &amp; &lt;x&gt;', 'default double-brace behavior');
+});
+
+check('triple-brace renders raw content (no HTML-escape) — the pattern all rule files use for prose fields', () => {
+  const out = runner.renderString('{{{ v }}}', { v: 'Wave "2" & <x>' });
+  assertEq(out, 'Wave "2" & <x>', 'triple-brace preserves raw');
+});
+
 // ───────────────────────────────────────────────────────────────
 console.log('\n▸ filterByProfile');
 
@@ -562,6 +575,181 @@ check('runtime error in one rule does not halt evaluation of others', () => {
   const res = runner.evaluate({ ruleFile: file, event, profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
   assertEq(res.findings.length, 1, 'good still fires');
   assertEq(res.findings[0].rule_id, 'GOOD', 'good rule');
+});
+
+// ───────────────────────────────────────────────────────────────
+console.log('\n▸ evalExpr — non-coerced expression evaluation');
+
+check('evalExpr returns raw object value', () => {
+  const r = runner.evalExpr('({ grade: tool_response.grade, score: 82 })', {
+    tool_response: { grade: 'B' },
+  });
+  assertEq(r.value, { grade: 'B', score: 82 }, 'raw object preserved');
+});
+
+check('evalExpr returns number values without boolean coercion', () => {
+  const r = runner.evalExpr('tool_response.count * 2', { tool_response: { count: 5 } });
+  assertEq(r.value, 10, 'number preserved');
+});
+
+check('evalExpr returns undefined + error on syntax error', () => {
+  const r = runner.evalExpr('not ((valid js', {});
+  assertTrue(r.error, 'error present');
+  assertEq(r.value, undefined, 'value is undefined');
+});
+
+check('evalExpr now_iso / now_ms helpers available', () => {
+  const ctx = { now_ms: 1700000000000, now_iso: '2023-11-14T22:13:20.000Z' };
+  const r = runner.evalExpr('now_iso', ctx);
+  assertEq(r.value, '2023-11-14T22:13:20.000Z', 'now_iso passed through');
+});
+
+// ───────────────────────────────────────────────────────────────
+console.log('\n▸ post_evaluation.persist — stateful rule support');
+
+check('persist expression result lands in stateMutations under the key', () => {
+  const ruleFile = {
+    version: 1,
+    event: 'PostToolUse',
+    matcher: 'test',
+    hit_policy: 'collect',
+    rules: [],
+    post_evaluation: {
+      persist: {
+        last_compliance: '({ grade: tool_response.grade, score: tool_response.score })',
+      },
+    },
+  };
+  const res = runner.evaluate({
+    ruleFile,
+    event: { tool_input: {}, tool_response: { grade: 'B', score: 82 } },
+    profile: null,
+    profileValues: {},
+    state: emptyState(),
+    now: Date.now(),
+  });
+  assertEq(res.stateMutations.last_compliance, { grade: 'B', score: 82 }, 'persisted shape');
+});
+
+check('persist expression errors log warning, do not crash evaluation, skip that key', () => {
+  const ruleFile = rf([], { hit_policy: 'collect' });
+  ruleFile.post_evaluation = {
+    persist: {
+      bad: 'tool_response.nonexistent.deep.path',
+      good: '({ ok: true })',
+    },
+  };
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, {}),
+    profile: null, profileValues: {}, state: emptyState(), now: Date.now(),
+  });
+  assertTrue(!('bad' in res.stateMutations), 'errored key skipped');
+  assertEq(res.stateMutations.good, { ok: true }, 'good key still persisted');
+});
+
+check('persist expression returning undefined is a no-op (no state write)', () => {
+  const ruleFile = rf([], { hit_policy: 'collect' });
+  ruleFile.post_evaluation = {
+    persist: {
+      last_compliance: 'undefined',  // explicit undefined
+    },
+  };
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, {}),
+    profile: null, profileValues: {}, state: emptyState(), now: Date.now(),
+  });
+  assertTrue(!('last_compliance' in res.stateMutations), 'undefined not written');
+});
+
+check('persist can reference state.* to do stateful diffs inside the expression', () => {
+  const ruleFile = rf([], { hit_policy: 'collect' });
+  ruleFile.post_evaluation = {
+    persist: {
+      // Imagine: a rule that tracks prior-grade as well as current
+      last_compliance: '({ grade: tool_response.grade, previous_grade: state.last_compliance ? state.last_compliance.grade : null })',
+    },
+  };
+  const s = { ...emptyState(), last_compliance: { grade: 'A', score: 92 } };
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, { grade: 'C' }),
+    profile: null, profileValues: {}, state: s, now: Date.now(),
+  });
+  assertEq(res.stateMutations.last_compliance, { grade: 'C', previous_grade: 'A' }, 'stateful diff');
+});
+
+check('persist coexists with rules — both sets of mutations accumulate', () => {
+  const ruleFile = rf(
+    [{ id: 'R1', when: 'true', debounce_seconds: 60, emit: { title: 'fired' } }],
+    { hit_policy: 'collect' },
+  );
+  ruleFile.post_evaluation = {
+    persist: {
+      last_compliance: '({ grade: tool_response.grade })',
+    },
+  };
+  const now = Date.now();
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, { grade: 'B' }),
+    profile: null, profileValues: {}, state: emptyState(), now,
+  });
+  assertEq(res.findings.length, 1, 'rule fired');
+  assertTrue(res.stateMutations.last_rule_fires['R1:*'], 'last_rule_fires written');
+  assertEq(res.stateMutations.last_compliance, { grade: 'B' }, 'persist also written');
+});
+
+check('validateRuleFile rejects non-object post_evaluation', () => {
+  try {
+    runner.validateRuleFile({ rules: [], post_evaluation: 'not an object' }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/post_evaluation/.test(e.message), 'mentions post_evaluation'); }
+});
+
+check('validateRuleFile rejects non-object post_evaluation.persist', () => {
+  try {
+    runner.validateRuleFile({ rules: [], post_evaluation: { persist: ['bad'] } }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/persist/.test(e.message), 'mentions persist'); }
+});
+
+check('validateRuleFile rejects non-string persist value', () => {
+  try {
+    runner.validateRuleFile({ rules: [], post_evaluation: { persist: { k: 123 } } }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/persist/.test(e.message), 'mentions persist'); }
+});
+
+check('validateRuleFile accepts well-formed post_evaluation.persist', () => {
+  runner.validateRuleFile({
+    rules: [],
+    post_evaluation: { persist: { last_compliance: '({ grade: tool_response.grade })' } },
+  }, 'mem');
+});
+
+// ───────────────────────────────────────────────────────────────
+console.log('\n▸ Evaluation context helpers — now_ms / now_iso');
+
+check('now_ms / now_iso are available inside when: expressions', () => {
+  const ruleFile = rf([{ id: 'R', when: 'typeof now_ms === "number" && typeof now_iso === "string"', emit: { title: 'ok' } }]);
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, {}),
+    profile: null, profileValues: {}, state: emptyState(), now: 1700000000000,
+  });
+  assertEq(res.findings.length, 1, 'fired via now helpers');
+});
+
+check('now_iso is a deterministic ISO string matching now_ms', () => {
+  const ruleFile = rf([{ id: 'R', when: 'now_iso === new Date(now_ms).toISOString()', emit: { title: 'ok' } }]);
+  const res = runner.evaluate({
+    ruleFile,
+    event: ev({}, {}),
+    profile: null, profileValues: {}, state: emptyState(), now: 1700000000000,
+  });
+  assertEq(res.findings.length, 1, 'helpers consistent');
 });
 
 // ───────────────────────────────────────────────────────────────

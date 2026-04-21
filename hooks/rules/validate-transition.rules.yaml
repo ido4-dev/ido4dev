@@ -33,11 +33,11 @@ rules:
     emit:
       title: "BRE blocked: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
       body: |
-        {{ tool_response.reason }}
+        {{{ tool_response.reason }}}
 
         Failed/warned steps:
         {{#tool_response.details}}
-        - [{{ severity }}] {{ stepName }}: {{ message }}
+        - [{{ severity }}] {{{ stepName }}}: {{{ message }}}
         {{/tool_response.details}}
       cta: "Review suggestions[] in the response, or run /mcp__plugin_ido4dev_ido4__compliance for broader governance context."
 
@@ -54,7 +54,7 @@ rules:
       body: |
         BRE approved with {{ tool_response.metadata.warnedSteps }} warning(s):
         {{#tool_response.details}}
-        - [{{ severity }}] {{ stepName }}: {{ message }}
+        - [{{ severity }}] {{{ stepName }}}: {{{ message }}}
         {{/tool_response.details}}
       cta: "Warnings don't block the transition but indicate governance attention. Consider whether to act on them before proceeding."
 
@@ -71,5 +71,5 @@ rules:
       body: |
         BRE approved cleanly. Suggested next steps from the validator:
         {{#tool_response.suggestions}}
-        - {{ . }}
+        - {{{ . }}}
         {{/tool_response.suggestions}}

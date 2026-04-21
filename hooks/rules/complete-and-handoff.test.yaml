@@ -1,0 +1,181 @@
+# Test fixtures for complete-and-handoff.rules.yaml.
+
+rule_file: complete-and-handoff.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # CH001 — Cascade unblock
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: completing a task unblocks 2 downstream → CH001 fires"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 42, agentId: "alpha" }
+      tool_response:
+        completed: { issueNumber: 42, title: "Implement auth middleware" }
+        newlyUnblocked:
+          - { issueNumber: 43, title: "Wire middleware into router", recommendedAgent: "beta", reasoning: "beta matches coding capability" }
+          - { issueNumber: 45, title: "Document middleware for consumers", recommendedAgent: "gamma", reasoning: "gamma matches documentation capability" }
+        agentNextTask:
+          recommendation:
+            issueNumber: 43
+            title: "Wire middleware into router"
+            score: 55
+            reasoning: "Highest downstream leverage"
+            scoreBreakdown: { cascadeValue: 25, epicMomentum: 15, capabilityMatch: 10, dependencyFreshness: 5 }
+          alternatives: []
+          context: { activeContainer: "Wave 3", agentId: "alpha", lockedTasks: [], totalCandidates: 2 }
+    expect:
+      fired: [CH001_cascade_unblock, CH002_strong_next_recommendation]
+      title_contains: "unblocks 2"
+      body_contains: "#43"
+
+  - name: "scrum: completing a task unblocks 1 downstream → CH001 fires"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 101, agentId: "alpha" }
+      tool_response:
+        completed: { issueNumber: 101, title: "Write failing tests" }
+        newlyUnblocked:
+          - { issueNumber: 102, title: "Implement failing case", recommendedAgent: null, reasoning: "No agents registered" }
+        agentNextTask:
+          recommendation: null
+          alternatives: []
+          context: { activeContainer: "Sprint 5", agentId: "alpha", lockedTasks: [], totalCandidates: 1 }
+    expect:
+      fired: [CH001_cascade_unblock]
+      title_contains: "unblocks 1"
+
+  - name: "shapeup: single unblock, no agent recommendation"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 7, agentId: "alpha" }
+      tool_response:
+        completed: { issueNumber: 7, title: "Close scope A" }
+        newlyUnblocked:
+          - { issueNumber: 8, title: "Ship cycle", recommendedAgent: null, reasoning: "Final scope in the hill" }
+        agentNextTask:
+          recommendation: null
+          alternatives: []
+          context: { activeContainer: "Cycle 2", agentId: "alpha", lockedTasks: [], totalCandidates: 1 }
+    expect:
+      fired: [CH001_cascade_unblock]
+
+  # ────────────────────────────────────────────────────────────────
+  # CH001 negative — empty cascade
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "completing a leaf task (empty newlyUnblocked) does NOT fire CH001"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 99, agentId: "alpha" }
+      tool_response:
+        completed: { issueNumber: 99, title: "Leaf task" }
+        newlyUnblocked: []
+        agentNextTask:
+          recommendation: null
+          alternatives: []
+          context: { activeContainer: "Wave 3", agentId: "alpha", lockedTasks: [], totalCandidates: 0 }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # CH002 — Strong next-task recommendation
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "high cascadeValue (≥15) fires CH002 with reasoning breakdown"
+    profile: hydro
+    input:
+      tool_response:
+        completed: { issueNumber: 42, title: "Done" }
+        newlyUnblocked: []
+        agentNextTask:
+          recommendation:
+            issueNumber: 50
+            title: "Critical-path task"
+            score: 70
+            reasoning: "Unblocks 6 downstream tasks across two epics"
+            scoreBreakdown: { cascadeValue: 35, epicMomentum: 10, capabilityMatch: 15, dependencyFreshness: 10 }
+          alternatives: []
+          context: { activeContainer: "Wave 4", agentId: "alpha", lockedTasks: [], totalCandidates: 5 }
+    expect:
+      fired: [CH002_strong_next_recommendation]
+      body_contains: "cascade leverage: 35/40"
+
+  - name: "high epicMomentum (≥15) alone fires CH002 (scrum)"
+    profile: scrum
+    input:
+      tool_response:
+        completed: { issueNumber: 200, title: "Done" }
+        newlyUnblocked: []
+        agentNextTask:
+          recommendation:
+            issueNumber: 201
+            title: "Finish the sprint"
+            score: 45
+            reasoning: "Last task in an in-progress epic — closing epic unlocks next sprint planning"
+            scoreBreakdown: { cascadeValue: 5, epicMomentum: 22, capabilityMatch: 12, dependencyFreshness: 6 }
+          alternatives: []
+          context: { activeContainer: "Sprint 5", agentId: "alpha", lockedTasks: [], totalCandidates: 3 }
+    expect:
+      fired: [CH002_strong_next_recommendation]
+      body_contains: "epic momentum: 22/25"
+
+  # ────────────────────────────────────────────────────────────────
+  # CH002 negative — low leverage or no recommendation
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "weak next task (cascade + momentum both <15) does NOT fire CH002"
+    profile: hydro
+    input:
+      tool_response:
+        completed: { issueNumber: 42, title: "Done" }
+        newlyUnblocked: []
+        agentNextTask:
+          recommendation:
+            issueNumber: 60
+            title: "Incremental polish"
+            score: 25
+            reasoning: "Nothing downstream"
+            scoreBreakdown: { cascadeValue: 4, epicMomentum: 8, capabilityMatch: 10, dependencyFreshness: 3 }
+          alternatives: []
+          context: { activeContainer: "Wave 3", agentId: "alpha", lockedTasks: [], totalCandidates: 2 }
+    expect:
+      fired: []
+
+  - name: "null next-task recommendation does NOT fire CH002"
+    profile: shapeup
+    input:
+      tool_response:
+        completed: { issueNumber: 7, title: "Done" }
+        newlyUnblocked: []
+        agentNextTask:
+          recommendation: null
+          alternatives: []
+          context: { activeContainer: "Cycle 2", agentId: "alpha", lockedTasks: [], totalCandidates: 0 }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # Both fire together — cascade AND strong next recommendation
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "cascade + strong next rec: both CH001 and CH002 fire in order"
+    profile: hydro
+    input:
+      tool_response:
+        completed: { issueNumber: 42, title: "Done" }
+        newlyUnblocked:
+          - { issueNumber: 43, title: "First newly ready", recommendedAgent: "beta", reasoning: "coding match" }
+          - { issueNumber: 44, title: "Second newly ready", recommendedAgent: "gamma", reasoning: "review match" }
+          - { issueNumber: 45, title: "Third newly ready", recommendedAgent: null, reasoning: "no agents" }
+        agentNextTask:
+          recommendation:
+            issueNumber: 43
+            title: "First newly ready"
+            score: 60
+            reasoning: "High cascade + matches your capability"
+            scoreBreakdown: { cascadeValue: 28, epicMomentum: 12, capabilityMatch: 15, dependencyFreshness: 5 }
+          alternatives: []
+          context: { activeContainer: "Wave 3", agentId: "alpha", lockedTasks: [], totalCandidates: 3 }
+    expect:
+      fired: [CH001_cascade_unblock, CH002_strong_next_recommendation]

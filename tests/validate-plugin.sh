@@ -468,6 +468,97 @@ else
   warn "rule-runner unit tests not checked (node not in PATH or test file missing)"
 fi
 
+# ─── O. Rule files + integration tests (Phase 3 Stage 3) ───
+# hooks/rules/ holds the YAML rule files consumed by rule-runner. Each file
+# must have a sibling *.test.yaml with fixtures; tests/rule-file-integration.test.mjs
+# walks them all through runner.evaluate() and asserts expected fired rule IDs.
+# Also asserts that no PostToolUse matcher still uses "type": "prompt" for
+# matchers we've migrated — catches regressions.
+
+echo ""
+echo "▸ Rule files + integration tests"
+
+if [ -d hooks/rules ]; then
+  pass "hooks/rules/ directory exists"
+
+  RULES_COUNT=$(ls hooks/rules/*.rules.yaml 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$RULES_COUNT" -gt 0 ]; then
+    pass "hooks/rules/ has $RULES_COUNT .rules.yaml file(s)"
+  else
+    fail "hooks/rules/ has no .rules.yaml files — Stage 3 should have shipped at least one"
+  fi
+
+  # Every *.rules.yaml has a sibling *.test.yaml
+  MISSING_TESTS=0
+  for RF in hooks/rules/*.rules.yaml; do
+    [ -f "$RF" ] || continue
+    TF="${RF%.rules.yaml}.test.yaml"
+    if [ ! -f "$TF" ]; then
+      fail "rule file has no sibling test file: $RF (expected $TF)"
+      MISSING_TESTS=$((MISSING_TESTS + 1))
+    fi
+  done
+  [ "$MISSING_TESTS" = "0" ] && pass "every .rules.yaml has a sibling .test.yaml"
+
+  # Rule files parse as valid YAML and have the required shape.
+  if command -v node &>/dev/null; then
+    SCHEMA_BAD=0
+    for RF in hooks/rules/*.rules.yaml; do
+      [ -f "$RF" ] || continue
+      if ! node -e "
+        const r = require('./hooks/lib/rule-runner.js');
+        try { r.loadRuleFile('$RF'); process.exit(0); }
+        catch (e) { console.error(e.message); process.exit(1); }
+      " 2>/dev/null; then
+        fail "rule file schema invalid: $RF"
+        SCHEMA_BAD=$((SCHEMA_BAD + 1))
+      fi
+    done
+    [ "$SCHEMA_BAD" = "0" ] && pass "every .rules.yaml parses + passes schema validation"
+  fi
+else
+  fail "hooks/rules/ missing — Stage 3 should have created it"
+fi
+
+# Run integration tests.
+if command -v node &>/dev/null && [ -f tests/rule-file-integration.test.mjs ]; then
+  if node tests/rule-file-integration.test.mjs >/dev/null 2>&1; then
+    INT_PASS=$(node tests/rule-file-integration.test.mjs 2>/dev/null | grep -oE '[0-9]+ passed' | head -1 | awk '{print $1}')
+    pass "rule-file integration tests pass ($INT_PASS cases)"
+  else
+    fail "rule-file integration tests failed — run: node tests/rule-file-integration.test.mjs"
+  fi
+else
+  warn "rule-file integration tests not checked"
+fi
+
+# No PostToolUse matcher should still use "type": "prompt" for matchers we've
+# migrated. Currently migrated: validate_transition. Extend this list as
+# Stage 4 rewrites land.
+MIGRATED_MATCHERS="validate_transition"
+if [ -f hooks/hooks.json ]; then
+  PROMPT_VIOLATIONS=0
+  for M in $MIGRATED_MATCHERS; do
+    # Python one-liner: confirm no PostToolUse hook for this matcher uses type:prompt
+    if python3 -c "
+import json, re, sys
+d = json.load(open('hooks/hooks.json'))
+for group in d.get('hooks', {}).get('PostToolUse', []):
+    matcher = group.get('matcher', '')
+    if '$M' in matcher:
+        for h in group.get('hooks', []):
+            if h.get('type') == 'prompt':
+                sys.exit(1)
+sys.exit(0)
+" 2>/dev/null; then
+      pass "no type:prompt PostToolUse hook for matcher containing '$M'"
+    else
+      fail "regression: type:prompt PostToolUse hook still present for matcher '$M'"
+      PROMPT_VIOLATIONS=$((PROMPT_VIOLATIONS + 1))
+    fi
+  done
+fi
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

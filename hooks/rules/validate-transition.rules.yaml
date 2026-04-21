@@ -1,0 +1,75 @@
+# Rules for PostToolUse on mcp__plugin_ido4dev_ido4__validate_transition.
+#
+# Replaces the Stage-pre-3 "type": "prompt" hook (violated design principle §3.1).
+# All when: expressions reference real fields on ValidationResult:
+#   - canProceed: boolean
+#   - transition: TransitionType
+#   - reason: string
+#   - details: ValidationStepResult[]  (each has stepName, passed, message, severity)
+#   - suggestions: string[]
+#   - metadata: { totalSteps, failedSteps, warnedSteps, executionTimeMs }
+#
+# Cascade/milestone/dependency signals are NOT on this matcher by design — they
+# live on adjacent tools (complete_and_handoff, validate_wave_completion,
+# get_task_execution_data). See phase-3-brief.md §5 Stage 4.
+#
+# Reference: ValidationResult in ~/dev-projects/ido4/packages/core/src/domains/tasks/types.ts:15-22
+# Reference: strategy doc §4.1 of ~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md
+
+version: 1
+event: PostToolUse
+matcher: mcp__plugin_ido4dev_ido4__validate_transition
+hit_policy: collect
+
+rules:
+  # VT001 — BRE rejected the transition.
+  # The tool call still ran; the response carries the verdict. Surface the
+  # reason and the failed/warned steps so the user (and any reviewing agent)
+  # has deterministic context for what to fix.
+  - id: VT001_blocked_by_bre
+    when: "tool_response.canProceed === false"
+    profiles: [hydro, scrum, shapeup]
+    severity: warning
+    emit:
+      title: "BRE blocked: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
+      body: |
+        {{ tool_response.reason }}
+
+        Failed/warned steps:
+        {{#tool_response.details}}
+        - [{{ severity }}] {{ stepName }}: {{ message }}
+        {{/tool_response.details}}
+      cta: "Review suggestions[] in the response, or run /mcp__plugin_ido4dev_ido4__compliance for broader governance context."
+
+  # VT002 — BRE permitted the transition but flagged warnings worth attention.
+  # Distinct from VT001: proceed IS allowed, but there's something the user
+  # should see before moving on. No debounce: each transition attempt's
+  # warning set is potentially different.
+  - id: VT002_passed_with_warnings
+    when: "tool_response.canProceed === true && Array.isArray(tool_response.details) && tool_response.details.some(d => d && d.severity === 'warning')"
+    profiles: [hydro, scrum, shapeup]
+    severity: info
+    emit:
+      title: "Transition permitted with warnings: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
+      body: |
+        BRE approved with {{ tool_response.metadata.warnedSteps }} warning(s):
+        {{#tool_response.details}}
+        - [{{ severity }}] {{ stepName }}: {{ message }}
+        {{/tool_response.details}}
+      cta: "Warnings don't block the transition but indicate governance attention. Consider whether to act on them before proceeding."
+
+  # VT003 — Clean approval with actionable suggestions.
+  # Fires only when there are no warnings (VT002 already covers those) and
+  # suggestions[] is non-empty. Surfaces BRE guidance that would otherwise
+  # be buried in the raw tool response.
+  - id: VT003_approved_with_suggestions
+    when: "tool_response.canProceed === true && Array.isArray(tool_response.details) && !tool_response.details.some(d => d && d.severity === 'warning') && Array.isArray(tool_response.suggestions) && tool_response.suggestions.length > 0"
+    profiles: [hydro, scrum, shapeup]
+    severity: info
+    emit:
+      title: "Transition approved with guidance: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
+      body: |
+        BRE approved cleanly. Suggested next steps from the validator:
+        {{#tool_response.suggestions}}
+        - {{ . }}
+        {{/tool_response.suggestions}}

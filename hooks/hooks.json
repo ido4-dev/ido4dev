@@ -39,8 +39,9 @@
         "matcher": "mcp__plugin_ido4dev_ido4__validate_transition",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "A governance state transition was just attempted on a task via validate_transition. Based on the tool result, assess:\n\nIf the result indicates a dry run (dryRun: true), no transition actually occurred — respond {\"decision\": \"allow\"}.\n\nOtherwise:\n1. Did this transition likely unblock downstream tasks? (e.g., completing a task that others depend on)\n2. Did this create a new blocker? (e.g., blocking a task that has dependents)\n3. Is this a significant milestone? (e.g., the transition completed a capability or crossed a completion threshold)\n\nRespond with JSON: {\"decision\": \"block\", \"reason\": \"[insight]\"} ONLY if there's a noteworthy governance impact to surface. Otherwise respond {\"decision\": \"allow\"}.\n\nExamples of noteworthy impacts:\n- \"Unblocked: completing this task likely unblocks downstream work. Consider running /mcp__plugin_ido4dev_ido4__standup to identify next priorities.\"\n- \"Warning: blocking this task may cascade to dependent tasks. Consider running /mcp__plugin_ido4dev_ido4__health to assess impact.\"\n- \"Milestone: this appears to complete a capability. Consider running /mcp__plugin_ido4dev_ido4__compliance to verify governance.\""
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/validate-transition.rules.yaml\" || true",
+            "timeout": 10
           }
         ]
       },

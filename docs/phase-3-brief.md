@@ -136,28 +136,30 @@ matcher: mcp__plugin_ido4dev_ido4__validate_transition
 hit_policy: collect
 rules:
   - id: VT001_blocked_by_bre
-    when: "tool_response.canProceed === false && tool_input.dryRun !== true"
+    when: "tool_response.canProceed === false"
     profiles: [hydro, scrum, shapeup]
     severity: warning
     emit:
-      title: "Transition blocked: {{ tool_input.transition }} on #{{ tool_input.issue }}"
+      title: "BRE blocked: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
       body: |
-        BRE rejected: {{ tool_response.reason }}
+        {{ tool_response.reason }}
 
         {{#tool_response.details}}
-        - {{ stepName }}: {{ message }}
+        - [{{ severity }}] {{ stepName }}: {{ message }}
         {{/tool_response.details}}
-      cta: "Review with /mcp__plugin_ido4dev_ido4__compliance"
+      cta: "Review suggestions[] or run /mcp__plugin_ido4dev_ido4__compliance for governance context."
 
-  - id: VT002_cascade_unblock
-    when: "tool_response.canProceed === true && tool_response.metadata?.unblockedCount > 0"
+  - id: VT002_passed_with_warnings
+    when: "tool_response.canProceed === true && tool_response.details.some(d => d.severity === 'warning')"
     profiles: [hydro, scrum, shapeup]
     severity: info
-    debounce_seconds: 60  # don't fire twice within a minute for the same issue
     emit:
-      title: "Cascade unblock: completing #{{ tool_input.issue }} unblocks {{ tool_response.metadata.unblockedCount }} downstream"
-      body: "Candidates to start next: {{ tool_response.metadata.unblockedRefs }}"
+      title: "Transition permitted with warnings: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
+      body: "BRE approved with {{ tool_response.metadata.warnedSteps }} warning(s). Review details[] for specifics."
 ```
+
+_Note: earlier drafts of this section included a `VT002_cascade_unblock` example referencing `tool_response.metadata.unblockedCount` — fields that don't exist on `ValidationResult`. The 2026-04-21 research pass corrected this (see §10). Cascade rules belong on matchers that actually produce cascade data (`complete_and_handoff` returns `newlyUnblocked[]`); see §5 Stage 4._
+
 
 **Rationale:**
 - YAML is reviewable, diffable, and universally understood. JSON alternative was rejected because multi-line template strings (Mustache) are painful in JSON.
@@ -406,21 +408,30 @@ Each stage is a single commit (or a coherent pair of commits). Commits land on `
 
 ### Stage 3: First PostToolUse rewrite — `validate_transition`
 
-- Create `hooks/rules/validate-transition.rules.yaml` with ~4–6 rules (BRE block, cascade unblock, milestone completion, blocked-repeat-pattern, plus any surfaced during drafting).
-- Create sibling `hooks/rules/validate-transition.test.yaml` with ≥2 test cases per rule per profile (so ≥36 test cases minimum).
-- Update `hooks/hooks.json` to call the rule-runner for this matcher instead of the current prompt.
+- Create `hooks/rules/validate-transition.rules.yaml` with 2–3 rules grounded in the actual `ValidationResult` shape (`canProceed`, `details[].severity`, `suggestions[]`, `metadata.warnedSteps`): VT001 BRE block, VT002 passed-with-warnings, optionally VT003 approved-with-suggestions.
+- Create sibling `hooks/rules/validate-transition.test.yaml` with ≥2 cases per rule per profile + negative cases (≥18 cases total).
+- Create the test-file walker `tests/rule-file-integration.test.mjs` per §4.6 (runs all `*.test.yaml` through `runner.evaluate()`).
+- Update `hooks/hooks.json` to call the rule-runner for this matcher instead of the current `"type": "prompt"`.
+- Fix the latent bug in the current prompt hook: `validate_transition` has no `dryRun` parameter (Zod strips it silently) and no `dryRun` field on the response — the existing dry-run branch is dead code. Our rules don't reference `dryRun` at all; validate_transition always fully validates.
 - Run `validate-plugin.sh` + rule-runner tests; verify in a live session (invoke `validate_transition`, observe templated findings in the conversation).
 
-*Goal of this stage:* one end-to-end path is live. If this works, every subsequent rewrite is mechanical.
+*Goal of this stage:* one end-to-end path is live on real fields. Cascade/milestone/blocked-repeat rules (that brief §4.1 first hypothesized belonged on this matcher) are deliberately NOT in this stage — the engine's `ValidationResult` doesn't carry cascade or milestone data; those signals live in adjacent tools and get rule files in Stage 4.
 
 ### Stage 4: Remaining PostToolUse rewrites
 
-- `assign_task_to_*` → `hooks/rules/assign-task.rules.yaml` + tests.
-- `compute_compliance_score` → `hooks/rules/compliance-score.rules.yaml` + tests. This is where the grade-drop detection lives (compares current grade to `state.last_compliance.grade`). Load-bearing for WS3 reactive layer.
+- `complete_and_handoff` → `hooks/rules/complete-and-handoff.rules.yaml` + tests. This is where cascade detection belongs: the tool returns `newlyUnblocked[]` with per-task reasoning, so rules can deterministically surface "#X completion unblocks Y downstream." Replaces what the brief originally imagined as a `validate_transition` cascade rule.
+- `assign_task_to_*` → `hooks/rules/assign-task.rules.yaml` + tests. Integrity + forward-dependency rules as originally planned.
+- `compute_compliance_score` → `hooks/rules/compliance-score.rules.yaml` + tests. Grade-drop detection (compares current grade to `state.last_compliance.grade`). Load-bearing for WS3 reactive layer.
+- Optional: `get_task_execution_data` → `hooks/rules/task-execution.rules.yaml` + tests. Surfaces downstream intelligence from `executionIntelligence.downstreamSignals[]` and `criticalPath`. Low-cost addition; high governance value.
+- Optional: `validate_wave_completion` → `hooks/rules/wave-completion.rules.yaml` + tests. Milestone-completion rules using the container-service result.
 - Update `hooks.json` accordingly.
 - Remove all remaining `"type": "prompt"` entries. Verify none remain via a grep check in `validate-plugin.sh`.
 
-*Goal of this stage:* §3.1 violation closed completely. No LLM in the hook interpretation layer.
+*Goal of this stage:* §3.1 violation closed completely. Rules distributed to the matchers that actually produce the signals they detect — cascade rules on `complete_and_handoff`, milestone rules on `validate_wave_completion`, grade-drop rules on `compute_compliance_score`. No LLM in the hook interpretation layer.
+
+### Stage 3.5 (optional, deferred — named but not committed)
+
+If deeper research in Stage 4 surfaces a concrete rule that would benefit from cascade info *on the `validate_transition` response itself* (rather than waiting for the separate `complete_and_handoff` call), the closure is a small cross-repo beat: extend `@ido4/mcp`'s `validate_transition` handler (~5 LOC at `packages/mcp/src/tools/task-tools.ts:106-113`) with a `computeCascadeInfo()` wrapper populating `metadata.cascadeInfo`. Non-breaking per the additive-fields rule in `mcp-runtime-contract.md:84`, and already named as a contract invariant at `mcp-runtime-contract.md:76` ("no longer returning the unblock-cascade information" flagged as a breaking change). Decide when the need surfaces; don't do speculative work.
 
 ### Stage 5: PreToolUse gates
 
@@ -540,6 +551,8 @@ Each will get resolved in its natural stage with a short status-log entry.
 |---|---|
 | 2026-04-20 | Brief drafted from 4-stream research pass (internal survey + Claude Code hook API + state-of-the-art agent frameworks + structured-data rule engines). Initial draft adopted YAML + JSON Logic + Mustache + DMN hit policies + event-log backbone. 9-stage execution sequence. Presented for user review. |
 | 2026-04-21 | User pushed back on whether adoptions were fit-for-purpose vs research-driven inertia. Audit produced two revisions: (1) JSON Logic replaced with inline JS expressions — clearer, more expressive, Node-only so portability argument didn't apply; (2) full event-log backbone replaced with minimal `state.json` + in-session buffer, with documented upgrade trigger when a rule legitimately needs cross-session event history. Everything else in the design survived the audit — every other pattern serves a current, concrete need. Suite-level `hook-and-rule-strategy.md` written as the standing reference; this brief is its first concrete application. Awaiting commit. |
+| 2026-04-21 | Stage 1 shipped (commit 263f1d0): SessionStart hardening + SessionEnd state persistence. Stage 2 shipped (commit 0ee9662): rule-runner library + vendored js-yaml/mustache bundles + `hooks/lib/state.js` + 52 unit tests. Stage 2 added YAML vendoring (not in original brief; §4.1 silent on parser) mirroring the tech-spec-validator pattern; all other Stage 2 decisions match the brief. |
+| 2026-04-21 | **Stage 3 research correction.** Pre-implementation investigation found the §4.1 example rule `VT002_cascade_unblock` referenced fields that don't exist on `ValidationResult` (`metadata.unblockedCount`, `metadata.unblockedRefs`). The engine intentionally keeps BRE validation-only; cascade/downstream impact lives in adjacent tools (`complete_and_handoff.newlyUnblocked[]`, `get_task_execution_data.executionIntelligence`, `get_next_task.scoreBreakdown.cascadeValue`). Similarly, milestone signals live in `validate_wave_completion` and `get_project_status`, not `validate_transition`. Corrections adopted (Option D): (a) §4.1 example rewritten with VT001 + VT002 on real fields; (b) §5 Stage 3 scope revised to 2-3 rules on real `ValidationResult` fields; (c) §5 Stage 4 expanded to include `complete_and_handoff`, optionally `get_task_execution_data` + `validate_wave_completion` — rules now distributed to the matchers that actually produce the signals; (d) new §5 Stage 3.5 named but deferred — the mcp-runtime-contract.md:76 drift (cascade info on `validate_transition`) can be closed with a 5-LOC enrichment in `@ido4/mcp`'s handler if a concrete Stage 4 rule surfaces the need. Side-finding: existing `"type": "prompt"` hook's dry-run check is dead code (Zod strips the unknown `dryRun` field; `ValidationResult` doesn't echo it); Stage 3 rules don't reference `dryRun`. |
 
 ---
 

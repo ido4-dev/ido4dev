@@ -1,0 +1,336 @@
+# Test fixtures for validate-transition.rules.yaml.
+#
+# Format: list of cases, each specifying a profile + input event + expected
+# fired rule IDs + optional assertions on emit fields. The integration runner
+# walks this file through hooks/lib/rule-runner.js evaluate(), no LLM.
+#
+# Coverage target: ≥2 positive cases per rule per profile + negative cases.
+
+rule_file: validate-transition.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # VT001 — BRE block
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: canProceed=false fires VT001"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 42, transition: approve }
+      tool_response:
+        canProceed: false
+        transition: approve
+        reason: "Task not in review state"
+        details:
+          - { stepName: StateGate, passed: false, message: "Expected IN_REVIEW, got IN_PROGRESS", severity: error }
+        suggestions: []
+        metadata: { totalSteps: 1, failedSteps: 1, warnedSteps: 0, executionTimeMs: 10 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+      severity: warning
+      title_contains: "BRE blocked"
+      body_contains: "Expected IN_REVIEW"
+
+  - name: "hydro: multiple failed steps still produces one VT001 with full context"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 42, transition: complete }
+      tool_response:
+        canProceed: false
+        transition: complete
+        reason: "Multiple governance gates failed"
+        details:
+          - { stepName: StateGate, passed: false, message: "Expected IN_REVIEW", severity: error }
+          - { stepName: DependencyGate, passed: false, message: "Upstream #40 not Done", severity: error }
+          - { stepName: QualityGate, passed: false, message: "Coverage below threshold", severity: error }
+        suggestions: ["Transition #40 first", "Re-run tests"]
+        metadata: { totalSteps: 3, failedSteps: 3, warnedSteps: 0, executionTimeMs: 42 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+      body_contains: "DependencyGate"
+
+  - name: "scrum: canProceed=false fires VT001 (profile-universal)"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 101, transition: start }
+      tool_response:
+        canProceed: false
+        transition: start
+        reason: "Sprint is already at WIP limit"
+        details:
+          - { stepName: WipGate, passed: false, message: "Sprint WIP at 5/5", severity: error }
+        suggestions: []
+        metadata: { totalSteps: 1, failedSteps: 1, warnedSteps: 0, executionTimeMs: 8 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+      title_contains: "#101"
+
+  - name: "scrum: canProceed=false with mixed error+warning severities"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 102, transition: complete }
+      tool_response:
+        canProceed: false
+        transition: complete
+        reason: "Sprint close policy violation"
+        details:
+          - { stepName: ReviewGate, passed: false, message: "No approved review", severity: error }
+          - { stepName: DocsGate, passed: false, message: "ADR not linked", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 2, failedSteps: 2, warnedSteps: 0, executionTimeMs: 15 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+      body_contains: "ADR not linked"
+
+  - name: "shapeup: canProceed=false fires VT001"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 7, transition: ship }
+      tool_response:
+        canProceed: false
+        transition: ship
+        reason: "Hill climb not reached"
+        details:
+          - { stepName: HillGate, passed: false, message: "Still uphill — 3 scopes open", severity: error }
+        suggestions: ["Close scope #2 first"]
+        metadata: { totalSteps: 1, failedSteps: 1, warnedSteps: 0, executionTimeMs: 18 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+      body_contains: "uphill"
+
+  - name: "shapeup: canProceed=false — empty details array still fires VT001"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 8, transition: ship }
+      tool_response:
+        canProceed: false
+        transition: ship
+        reason: "Unknown failure"
+        details: []
+        suggestions: []
+        metadata: { totalSteps: 0, failedSteps: 0, warnedSteps: 0, executionTimeMs: 3 }
+    expect:
+      fired: [VT001_blocked_by_bre]
+
+  # ────────────────────────────────────────────────────────────────
+  # VT002 — Passed with warnings
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: canProceed=true with one warning fires VT002"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 50, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: "OK"
+        details:
+          - { stepName: StateGate, passed: true, message: "State OK", severity: info }
+          - { stepName: DependencyGate, passed: true, message: "Upstream partially satisfied", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 2, failedSteps: 0, warnedSteps: 1, executionTimeMs: 11 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+      severity: info
+      title_contains: "warnings"
+      body_contains: "1 warning"
+
+  - name: "hydro: canProceed=true with TWO warnings — VT002 reflects count"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 51, transition: complete }
+      tool_response:
+        canProceed: true
+        transition: complete
+        reason: "OK with caveats"
+        details:
+          - { stepName: A, passed: true, message: "a", severity: warning }
+          - { stepName: B, passed: true, message: "b", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 2, failedSteps: 0, warnedSteps: 2, executionTimeMs: 14 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+      body_contains: "2 warning"
+
+  - name: "scrum: canProceed=true + warning fires VT002 (profile-universal)"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 150, transition: approve }
+      tool_response:
+        canProceed: true
+        transition: approve
+        reason: "OK with caveat"
+        details:
+          - { stepName: QualityGate, passed: true, message: "Coverage thin", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 1, executionTimeMs: 7 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+      title_contains: "#150"
+
+  - name: "scrum: canProceed=true + warning + suggestions — VT002 only (VT003 excluded by warning)"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 151, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: "OK"
+        details:
+          - { stepName: DependencyGate, passed: true, message: "Upstream partially done", severity: warning }
+        suggestions: ["Complete #148 first"]
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 1, executionTimeMs: 9 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+
+  - name: "shapeup: canProceed=true + warning fires VT002"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 9, transition: ship }
+      tool_response:
+        canProceed: true
+        transition: ship
+        reason: "OK with scope risk"
+        details:
+          - { stepName: ScopeGate, passed: true, message: "Two scopes still open", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 1, executionTimeMs: 8 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+      body_contains: "scope"
+
+  - name: "shapeup: canProceed=true + multiple warnings"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 10, transition: ship }
+      tool_response:
+        canProceed: true
+        transition: ship
+        reason: "OK"
+        details:
+          - { stepName: A, passed: true, message: "a", severity: warning }
+          - { stepName: B, passed: true, message: "b", severity: warning }
+          - { stepName: C, passed: true, message: "c", severity: warning }
+        suggestions: []
+        metadata: { totalSteps: 3, failedSteps: 0, warnedSteps: 3, executionTimeMs: 20 }
+    expect:
+      fired: [VT002_passed_with_warnings]
+      body_contains: "3 warning"
+
+  # ────────────────────────────────────────────────────────────────
+  # VT003 — Approved cleanly with suggestions
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: canProceed=true, no warnings, suggestions present → VT003"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 60, transition: complete }
+      tool_response:
+        canProceed: true
+        transition: complete
+        reason: "OK"
+        details:
+          - { stepName: StateGate, passed: true, message: "state OK", severity: info }
+        suggestions: ["Consider running /health now", "Downstream #61 is now ready"]
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 0, executionTimeMs: 5 }
+    expect:
+      fired: [VT003_approved_with_suggestions]
+      severity: info
+      title_contains: "approved with guidance"
+      body_contains: "Consider running"
+
+  - name: "hydro: empty details, suggestions present → VT003"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 61, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: "OK"
+        details: []
+        suggestions: ["Verify dependencies manually"]
+        metadata: { totalSteps: 0, failedSteps: 0, warnedSteps: 0, executionTimeMs: 2 }
+    expect:
+      fired: [VT003_approved_with_suggestions]
+      body_contains: "manually"
+
+  - name: "scrum: canProceed=true, info details, suggestions → VT003"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 200, transition: approve }
+      tool_response:
+        canProceed: true
+        transition: approve
+        reason: "OK"
+        details:
+          - { stepName: ReviewGate, passed: true, message: "Reviewed", severity: info }
+        suggestions: ["Link PR to ADR if applicable"]
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 0, executionTimeMs: 6 }
+    expect:
+      fired: [VT003_approved_with_suggestions]
+
+  - name: "shapeup: VT003 profile-universal"
+    profile: shapeup
+    input:
+      tool_input: { issueNumber: 11, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: "OK"
+        details:
+          - { stepName: AppetiteGate, passed: true, message: "Within appetite", severity: info }
+        suggestions: ["Pair with #12 if scope grows"]
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 0, executionTimeMs: 4 }
+    expect:
+      fired: [VT003_approved_with_suggestions]
+
+  # ────────────────────────────────────────────────────────────────
+  # Negative cases — nothing should fire
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "silent: clean approval with no warnings and no suggestions → nothing fires"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 70, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: "OK"
+        details:
+          - { stepName: StateGate, passed: true, message: "OK", severity: info }
+        suggestions: []
+        metadata: { totalSteps: 1, failedSteps: 0, warnedSteps: 0, executionTimeMs: 3 }
+    expect:
+      fired: []
+
+  - name: "silent: entirely empty response skeleton → nothing fires"
+    profile: scrum
+    input:
+      tool_input: { issueNumber: 71, transition: start }
+      tool_response:
+        canProceed: true
+        transition: start
+        reason: ""
+        details: []
+        suggestions: []
+        metadata: { totalSteps: 0, failedSteps: 0, warnedSteps: 0, executionTimeMs: 0 }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # Multi-fire sanity — VT001 alone when blocked even if suggestions exist
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "VT001 fires alone on block even when suggestions present (VT002/VT003 gated on canProceed=true)"
+    profile: hydro
+    input:
+      tool_input: { issueNumber: 80, transition: complete }
+      tool_response:
+        canProceed: false
+        transition: complete
+        reason: "Blocked"
+        details:
+          - { stepName: Gate, passed: false, message: "blocked", severity: error }
+        suggestions: ["Fix blocker first"]
+        metadata: { totalSteps: 1, failedSteps: 1, warnedSteps: 0, executionTimeMs: 6 }
+    expect:
+      fired: [VT001_blocked_by_bre]

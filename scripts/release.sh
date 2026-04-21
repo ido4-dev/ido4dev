@@ -62,12 +62,18 @@ echo "Pre-flight: clean working tree ✓"
 
 # ─── Pre-flight: Bundle Validation ─────────────────────────
 #
-# ido4dev ships the @ido4/tech-spec-format validator bundled in dist/ so
-# skills/ingest-spec can fail-fast on structural errors before calling the
-# ingest_spec MCP tool. This mirrors the ido4specs/ido4shape dual-bundle
-# pattern. The bundle must be present, have a version header, and be at
-# or near the latest on npm. Release refuses to proceed if the bundle is
-# missing or malformed; drift against npm is a warning (--yes auto-confirms).
+# ido4dev ships three bundles, each version-locked with a marker + checksum:
+#   1. dist/tech-spec-validator.js       — @ido4/tech-spec-format (ours)
+#   2. hooks/lib/vendored/yaml.js        — js-yaml (vendored OSS)
+#   3. hooks/lib/vendored/mustache.js    — mustache (vendored OSS)
+#
+# #1 backs skills/ingest-spec fail-fast pre-validation; #2 and #3 back the
+# Phase 3 hook rule-runner. Bundles are not in package.json — the hook layer
+# stays zero-npm-dep so SessionStart graceful-degradation remains meaningful
+# (§4.9 of ~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md).
+#
+# Release refuses to proceed if any bundle is missing or malformed; drift
+# against npm is a warning (--yes auto-confirms).
 
 check_bundle() {
   local label="$1"
@@ -75,10 +81,13 @@ check_bundle() {
   local version_file="$3"
   local npm_package="$4"
   local header_match="$5"
+  # Optional: custom remediation script. Defaults to legacy "update-<label>-validator.sh"
+  # naming used by tech-spec-validator; new vendored bundles pass e.g. update-yaml-vendor.sh.
+  local update_script="${6:-scripts/update-${label}-validator.sh}"
 
   if [ ! -f "$bundle_file" ]; then
     echo "ERROR: $bundle_file not found."
-    echo "Run: scripts/update-${label}-validator.sh <version>"
+    echo "Run: $update_script <version>"
     exit 1
   fi
 
@@ -94,9 +103,9 @@ check_bundle() {
 
   if [ "$bundled_version" != "$latest_npm" ] && [ "$latest_npm" != "unknown" ]; then
     echo "WARNING: Bundled $label is v$bundled_version, latest on npm is v$latest_npm"
-    echo "Consider running: scripts/update-${label}-validator.sh $latest_npm"
+    echo "Consider running: $update_script $latest_npm"
     if [ "$YES_FLAG" = "true" ]; then
-      echo "  --yes flag: proceeding despite validator drift"
+      echo "  --yes flag: proceeding despite bundle drift"
     else
       read -p "Continue anyway? [y/N] " -n 1 -r
       echo
@@ -112,6 +121,20 @@ check_bundle "tech-spec" \
   "$REPO_ROOT/dist/.tech-spec-format-version" \
   "@ido4/tech-spec-format" \
   "@ido4/tech-spec-format v"
+
+check_bundle "yaml-vendor" \
+  "$REPO_ROOT/hooks/lib/vendored/yaml.js" \
+  "$REPO_ROOT/hooks/lib/vendored/.yaml-version" \
+  "js-yaml" \
+  "@ido4/vendored js-yaml v" \
+  "scripts/update-yaml-vendor.sh"
+
+check_bundle "mustache-vendor" \
+  "$REPO_ROOT/hooks/lib/vendored/mustache.js" \
+  "$REPO_ROOT/hooks/lib/vendored/.mustache-version" \
+  "mustache" \
+  "@ido4/vendored mustache v" \
+  "scripts/update-mustache-vendor.sh"
 
 echo ""
 

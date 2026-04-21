@@ -358,6 +358,116 @@ if [ -f "hooks/hooks.json" ]; then
     || fail "hooks.json missing SessionEnd event — state persistence won't fire"
 fi
 
+# ─── M. Hook library + vendored bundles (Phase 3 Stage 2) ───
+# hooks/lib/rule-runner.js and hooks/lib/state.js are the pure-library surface
+# that Stage 3+ rule files will consume. hooks/lib/vendored/ holds js-yaml and
+# mustache bundles — checksum- and version-locked, zero runtime npm deps.
+
+echo ""
+echo "▸ Hook library (Phase 3 Stage 2)"
+
+[ -d "hooks/lib" ] && pass "hooks/lib/ directory exists" || fail "hooks/lib/ missing"
+[ -d "hooks/lib/vendored" ] && pass "hooks/lib/vendored/ directory exists" || fail "hooks/lib/vendored/ missing"
+
+for LIB in hooks/lib/rule-runner.js hooks/lib/state.js; do
+  if [ -f "$LIB" ]; then
+    pass "$(basename "$LIB") exists"
+    if command -v node &>/dev/null; then
+      node --check "$LIB" 2>/dev/null && pass "$(basename "$LIB") node syntax valid" || fail "$(basename "$LIB") node syntax invalid"
+    fi
+  else
+    fail "$LIB missing"
+  fi
+done
+
+# Vendored bundle verification — each of yaml and mustache must have:
+#   1. bundle file present
+#   2. version marker matching ^X.Y.Z$
+#   3. banner header identifying the bundle
+#   4. checksum file present + matching the bundle SHA-256
+verify_vendored_bundle() {
+  local label="$1"
+  local upstream_name="$2"
+  local bundle="hooks/lib/vendored/$label.js"
+  local version_file="hooks/lib/vendored/.$label-version"
+  local checksum_file="hooks/lib/vendored/.$label-checksum"
+  local header="@ido4/vendored $upstream_name v"
+
+  if [ -f "$bundle" ]; then
+    pass "$label bundle exists"
+  else
+    fail "$label bundle missing ($bundle)"
+    return
+  fi
+
+  if [ -f "$version_file" ]; then
+    local v
+    v=$(cat "$version_file" | tr -d '[:space:]')
+    if echo "$v" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+      pass "$label version marker valid (v$v)"
+    else
+      fail "$label version marker malformed: '$v'"
+    fi
+  else
+    fail "$label version marker missing ($version_file)"
+  fi
+
+  if head -3 "$bundle" | grep -q "$header"; then
+    pass "$label bundle has ido4 banner header"
+  else
+    fail "$label bundle missing ido4 banner header"
+  fi
+
+  if [ -f "$checksum_file" ]; then
+    pass "$label checksum file exists"
+    local expected actual
+    expected=$(cat "$checksum_file" | awk '{print $1}')
+    actual=$(shasum -a 256 "$bundle" | awk '{print $1}')
+    if [ "$expected" = "$actual" ]; then
+      pass "$label checksum matches bundle (SHA-256 verified)"
+    else
+      fail "$label checksum MISMATCH — expected $expected, got $actual"
+    fi
+  else
+    fail "$label checksum file missing"
+  fi
+}
+
+echo ""
+echo "▸ Vendored bundles (yaml, mustache)"
+
+verify_vendored_bundle "yaml" "js-yaml"
+verify_vendored_bundle "mustache" "mustache"
+
+# Runtime smoke: rule-runner loads both bundles and exports its pure surface.
+if command -v node &>/dev/null && [ -f hooks/lib/rule-runner.js ]; then
+  if node -e "
+    const r = require('./hooks/lib/rule-runner.js');
+    for (const key of ['evaluate', 'filterByProfile', 'evalWhen', 'renderEmit', 'loadRuleFile', 'loadProfile', 'validateRuleFile', 'formatHookResponse']) {
+      if (typeof r[key] !== 'function') { console.error('missing export: ' + key); process.exit(1); }
+    }
+  " 2>/dev/null; then
+    pass "rule-runner.js loads and exports expected surface"
+  else
+    fail "rule-runner.js failed to load or missing expected exports"
+  fi
+fi
+
+# Rule-runner unit tests: zero network, zero LLM, deterministic.
+echo ""
+echo "▸ Rule-runner unit tests"
+
+if command -v node &>/dev/null && [ -f tests/rule-runner-unit.test.mjs ]; then
+  if node tests/rule-runner-unit.test.mjs >/dev/null 2>&1; then
+    UNIT_PASS=$(node tests/rule-runner-unit.test.mjs 2>/dev/null | grep -oE '[0-9]+ passed' | head -1 | awk '{print $1}')
+    pass "rule-runner unit tests pass ($UNIT_PASS cases)"
+  else
+    fail "rule-runner unit tests failed — run: node tests/rule-runner-unit.test.mjs"
+  fi
+else
+  warn "rule-runner unit tests not checked (node not in PATH or test file missing)"
+fi
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

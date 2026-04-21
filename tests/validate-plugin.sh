@@ -150,8 +150,14 @@ if [ -f "hooks/hooks.json" ]; then
   python3 -c "import json; d=json.load(open('hooks/hooks.json')); assert 'PostToolUse' in d.get('hooks',{})" 2>/dev/null \
     && pass "Has PostToolUse hook" || fail "Missing PostToolUse hook"
 
-  grep -q 'CLAUDE_PLUGIN_DATA' hooks/hooks.json \
-    && pass "SessionStart references CLAUDE_PLUGIN_DATA" || fail "SessionStart missing CLAUDE_PLUGIN_DATA"
+  # After Phase 3 Stage 1, CLAUDE_PLUGIN_DATA usage moved from inline hooks.json
+  # commands to extracted hooks/scripts/*.sh files. Check either location — an
+  # intermediate state during Phase 3 execution may have both.
+  if grep -q 'CLAUDE_PLUGIN_DATA' hooks/hooks.json || grep -rq 'CLAUDE_PLUGIN_DATA' hooks/scripts/ 2>/dev/null; then
+    pass "SessionStart references CLAUDE_PLUGIN_DATA (in hooks.json or hooks/scripts/)"
+  else
+    fail "SessionStart missing CLAUDE_PLUGIN_DATA in both hooks.json and hooks/scripts/"
+  fi
 else
   fail "hooks.json missing"
 fi
@@ -282,10 +288,12 @@ if command -v node &>/dev/null && [ -f "$TECH_BUNDLE" ]; then
   fi
 fi
 
-# SessionStart hook must copy the bundle so skills/ingest-spec can invoke it
+# SessionStart hook must copy the bundle so skills/ingest-spec can invoke it.
+# Check either hooks.json (Phase 2 inline form) or hooks/scripts/ (Phase 3
+# extracted form — hooks.json references the script file).
 if [ -f "hooks/hooks.json" ]; then
-  if grep -q "tech-spec-validator.js" hooks/hooks.json; then
-    pass "SessionStart copies tech-spec-validator.js to CLAUDE_PLUGIN_DATA"
+  if grep -q "tech-spec-validator.js" hooks/hooks.json || grep -rq "tech-spec-validator.js" hooks/scripts/ 2>/dev/null; then
+    pass "SessionStart copies tech-spec-validator.js to CLAUDE_PLUGIN_DATA (in hooks.json or hooks/scripts/)"
   else
     fail "SessionStart does NOT copy tech-spec-validator.js — skills/ingest-spec pre-validation will fail"
   fi
@@ -298,6 +306,56 @@ if [ -f "skills/ingest-spec/SKILL.md" ]; then
   else
     fail "skills/ingest-spec does NOT reference tech-spec-validator.js — pre-validation not wired"
   fi
+fi
+
+# ─── L. Hook scripts (Phase 3 Stage 1) ───
+# SessionStart/End hook scripts live in hooks/scripts/ — extracted from inline
+# hooks.json commands so they can be individually tested and syntax-checked.
+# See phase-3-brief.md Stage 1 for the rationale (graceful degradation,
+# state.json persistence substrate for WS3).
+
+echo ""
+echo "▸ Hook scripts"
+
+[ -d "hooks/scripts" ] && pass "hooks/scripts/ directory exists" || fail "hooks/scripts/ missing"
+
+EXPECTED_HOOK_SCRIPTS="session-start-mcp.sh session-start-bundle.sh session-start-banner.js session-end-state.js"
+for HS in $EXPECTED_HOOK_SCRIPTS; do
+  HS_PATH="hooks/scripts/$HS"
+  if [ -f "$HS_PATH" ]; then
+    pass "$HS exists"
+    [ -x "$HS_PATH" ] && pass "$HS is executable" || fail "$HS is not executable (chmod +x)"
+    case "$HS" in
+      *.sh)
+        bash -n "$HS_PATH" 2>/dev/null && pass "$HS bash syntax valid" || fail "$HS bash syntax invalid"
+        ;;
+      *.js)
+        if command -v node &>/dev/null; then
+          node --check "$HS_PATH" 2>/dev/null && pass "$HS node syntax valid" || fail "$HS node syntax invalid"
+        else
+          warn "$HS node syntax not checked (node not in PATH)"
+        fi
+        ;;
+    esac
+  else
+    fail "$HS missing at $HS_PATH"
+  fi
+done
+
+# hooks.json references all four scripts
+if [ -f "hooks/hooks.json" ]; then
+  for HS in $EXPECTED_HOOK_SCRIPTS; do
+    if grep -q "$HS" hooks/hooks.json; then
+      pass "hooks.json references $HS"
+    else
+      fail "hooks.json does NOT reference $HS — script orphaned"
+    fi
+  done
+
+  # SessionEnd hook must be registered
+  python3 -c "import json; d = json.load(open('hooks/hooks.json')); assert 'SessionEnd' in d.get('hooks', {})" 2>/dev/null \
+    && pass "hooks.json registers SessionEnd event" \
+    || fail "hooks.json missing SessionEnd event — state persistence won't fire"
 fi
 
 # ─── J. Claude Code Native Validation ───

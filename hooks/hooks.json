@@ -6,12 +6,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/package.json\" >/dev/null 2>&1 || (cd \"${CLAUDE_PLUGIN_DATA}\" && cp \"${CLAUDE_PLUGIN_ROOT}/package.json\" . && npm install --production 2>&1) || rm -f \"${CLAUDE_PLUGIN_DATA}/package.json\"",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start-mcp.sh\"",
             "timeout": 120
           },
           {
             "type": "command",
-            "command": "cp \"${CLAUDE_PLUGIN_ROOT}/dist/tech-spec-validator.js\" \"${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js\" 2>/dev/null || true",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start-bundle.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start-banner.js\" || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end-state.js\" || true",
             "timeout": 5
           }
         ]

@@ -75,6 +75,12 @@ A change is **breaking** if it:
 4. Changes a criticalTools tool's response shape such that ido4dev's parsing breaks — removing a documented field, renaming a field, narrowing a type, restructuring a payload
 5. Changes implicit behavior the consumer relies on — for example, `ingest_spec` with `dryRun=true` no longer returning the methodology preview, or `validate_transition` no longer returning the unblock-cascade information
 
+> **Known contract drift (as of 2026-04-21).** The `validate_transition` unblock-cascade invariant named in item 5 above is documented-but-not-currently-implemented. The tool's response shape (`ValidationResult` in `@ido4/core/packages/core/src/domains/tasks/types.ts`) carries `canProceed / transition / reason / details / suggestions / metadata` — the `metadata` field is populated only with `{totalSteps, failedSteps, warnedSteps, executionTimeMs}` and does not include cascade info.
+>
+> Cascade/impact signals are surfaced on adjacent tools by engine design: `complete_and_handoff.newlyUnblocked[]` (newly-ready downstream tasks with per-task reasoning), `get_task_execution_data.executionIntelligence` (downstream/dependency signals + critical-path), and `get_next_task.scoreBreakdown.cascadeValue`. The BRE stays validation-only; impact analysis lives in the distribution/dependency services. This separation is intentional, not a bug.
+>
+> Resolution path (deferred, not committed): `ido4dev/docs/phase-3-brief.md §5 Stage 3.5` sketches a ~5-LOC enrichment in `@ido4/mcp`'s `validate_transition` handler that would populate `metadata.cascadeInfo` non-breakingly (additive per the additive-fields rule below). Decision deferred until a concrete consumer rule needs cascade info specifically on `validate_transition`'s response rather than the already-correct adjacent tools; no such rule exists in Phase 3's rule set (cascade rules live on `complete_and_handoff`).
+
 ### Additive change (non-breaking, ships with minor version)
 
 A change is **additive** if it:

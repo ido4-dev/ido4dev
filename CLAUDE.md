@@ -42,19 +42,25 @@ The decomposition / authoring slice of this plugin was extracted into a standalo
 
 `ido4specs` has zero runtime dependency on this plugin; both can exist independently.
 
-## Active Work — Phase 2 Plugin Diet (in progress)
+## Active Work — Phase 3 Hooks Rebuild (in progress)
 
-The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Goal: reduce the plugin skill surface to stateful workflows, letting MCP Prompts serve the ceremony surface directly via `/mcp__plugin_ido4dev_ido4__<prompt>` slash commands. The methodology-aware PromptGenerators in `@ido4/mcp` are the single source of truth for ceremonies; the plugin no longer duplicates them.
+The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md`. Phase 3 rebuilds the hook layer so it's deterministic (no `"type": "prompt"` interpreting structured BRE responses), profile-aware via data-driven rule files, stateful across sessions, and rich enough to support the Phase 4 PM-agent autonomy work. Execution spec: `docs/phase-3-brief.md`; standing reference: `~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md`.
 
-**State as of 2026-04-20:**
-- **Phase 1** (cleanup, planning docs) — complete
-- **Phase 2.1** (shell-skill proof via Runtime Prompt Rendering) — ABANDONED after live verification. The pattern was built to solve a problem that turned out not to exist: MCP Prompts ARE invokable as slash commands in Claude Code as `/mcp__plugin_ido4dev_ido4__<prompt>`. Pivoted to Option A (MCP-as-ceremony-surface). See `docs/phase-2-brief.md` for the reasoning.
-- **Phase 2.2** (ceremony skill deletion + reference sweep) — complete. 10 ceremony duplicates (standup/board/health/compliance/plan-wave|sprint|cycle/retro-wave|sprint|cycle) deleted; PM agent, onboard, guided-demo, sandbox, ingest-spec, pilot-test, hooks, README updated to reference the MCP ceremony prompts.
-- **Phase 2 Stage 4** (migration debt cleanup) — **complete (2026-04-20)**. All six items landed: sandbox-* hard-removed, spec-validate deleted, pilot-test rebranded dev-only, spec-quality migrated to ido4specs (v0.4.0 released), tech-spec-validator bundled into ido4dev with `ingest-spec` Stage 0b pre-validation, auto-update workflow + cross-repo dispatch wired to ido4 monorepo, end-of-phase smoke test passed (focused rather than full-vision; `reports/e2e-004-phase-2-smoke.md`). Three UX gaps surfaced and fixed in-session during smoke test.
-- **Phase 3** (hooks rebuild, WS2) — next. Architectural scoping is in `architecture-evolution-plan.md` §8 WS2; `phase-3-brief.md` (execution spec) to be written before code starts.
-- **Phase 4** (PM autonomy, WS3) — sequenced after Phase 3; depends on WS2 hook infrastructure. Also has open investigation in §7.5 about Claude Code's `CronCreate` availability.
+**Product-thesis framing (§3.9 of the evolution plan).** Hooks/rules/state aren't UX polish — they're the operating substrate for hybrid human+AI engineering at scale. Humans + old tools + AI in the old pattern leaves AI's speed capped at human-coordination speed; pure AI without governance drifts invisibly. ido4 bridges them by **operationalizing institutional memory** (remembering methodology + dependencies + compliance trajectory + epic relationships) and **imposing it at the moment it's relevant**. Mutual substrate: AI agents get context they'd otherwise reconstruct; humans offload coordination to the system. The test for every rule: "does this operationalize institutional memory — either remembering something, or surfacing something the user/agent needs but doesn't have in context?" If not, it's noise. See `architecture-evolution-plan.md §3.9` for the full framing.
 
-**Before changing skills, agents, hooks, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` and `~/dev-projects/ido4dev/docs/phase-2-brief.md` first. Decisions are recorded in plan §6; do not re-litigate.
+**State as of 2026-04-21:**
+- **Phase 1** (cleanup, planning docs) — complete.
+- **Phase 2** (plugin diet — ceremony duplicates deleted, migration debt cleared, Stage 4 items landed) — complete (2026-04-20). Report: `reports/e2e-004-phase-2-smoke.md`.
+- **Phase 3** (hooks rebuild, WS2) — in progress. 4 of 9 stages shipped:
+  - Stage 1 ✓ commit `263f1d0` — SessionStart hardening + SessionEnd state persistence.
+  - Stage 2 ✓ commit `0ee9662` — rule-runner library + vendored js-yaml/mustache bundles + `hooks/lib/state.js` + 52 unit tests.
+  - Stage 3 ✓ commit `f363419` — `validate_transition` rule file (3 rules on real `ValidationResult` fields); `"type": "prompt"` → `"type": "command"` flip; integration test runner. Research correction during design: cascade/milestone fields the brief hypothesized on `validate_transition` don't exist — signals live on adjacent tools, rules moved to Stage 4.
+  - Stage 4 ✓ commit `68f0f6a` — 5 rules across `compliance-score.rules.yaml` + `complete-and-handoff.rules.yaml` + `assign-task.rules.yaml`; runner gains `post_evaluation.persist` for stateful rules (grade-drop baseline); regex matcher for the wave/sprint/cycle tool family. §3.1 violation closed across all Phase 3-scoped matchers.
+  - Stages 5–9 remaining: PreToolUse gates, PostCompact reseed, `escalate_to: direct` wiring, docs (`hook-architecture.md`), closing smoke test (`reports/e2e-005-phase-3-smoke.md`).
+  - Stage 3.5 (optional cross-repo beat — close the `mcp-runtime-contract.md:76` cascade-info drift via a ~5-LOC enrichment in `@ido4/mcp`'s handler) is named but deferred; no Stage 4 rule required it.
+- **Phase 4** (PM agent autonomy, WS3) — sequenced after Phase 3 closes. Depends on the Phase 3 substrate (state layer, `escalate_to` slot, `last_compliance` trajectory, stateful-rule pattern). Brief deferred until Phase 3's live smoke test lands — writing a Phase 4 brief before lived experience would repeat the Stage 3 research-correction mistake. Open investigation in `architecture-evolution-plan.md §7.6` about Claude Code's `CronCreate` availability.
+
+**Before changing skills, agents, hooks, rule files, or anything in `docs/`:** read `~/dev-projects/ido4dev/docs/architecture-evolution-plan.md` (especially §3 principles, §6 decisions, §11 status log) and `~/dev-projects/ido4dev/docs/phase-3-brief.md`. Decisions are recorded in plan §6; do not re-litigate. For hook/rule design specifically, also read the suite-level `~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md` (§2 principles, §4 canonical patterns, §5 anti-patterns).
 
 **Doc discipline (working principle):** update `architecture-evolution-plan.md` §11 (status log) at every phase gate, after every notable achievement, after every decision lands. The plan is a living document — staleness erodes its value as the guiding driver. The same applies to `phase-2-brief.md` and any other in-progress design briefs: progress that doesn't reach the doc didn't happen as far as future sessions are concerned.
 

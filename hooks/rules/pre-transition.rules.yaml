@@ -1,0 +1,66 @@
+# PreToolUse gates on the transition-executing tool family.
+#
+# Transition tools are dynamically generated from profile.transitions
+# (~/dev-projects/ido4/packages/core/src/domains/tasks/task-tools.ts:197-339).
+# They all share a schema that accepts `dryRun: boolean` and `skipValidation: boolean`
+# alongside the transition-specific parameters.
+#
+# Scope caveat (see phase-3-brief.md §5 Stage 5, 2026-04-21 correction):
+# PreToolUse hooks see tool_input + state.json only — no event history.
+# The original brief envisioned "gate approve without preceding review" and
+# "gate retry after BRE failure," both of which need cross-turn history
+# we deliberately didn't ship (strategy §4.6 state.json over §4.7 event log).
+# Those gates are tracked in architecture-evolution-plan.md §7.7 as pending
+# triggers for event-log promotion.
+#
+# What this file ships: the two gates that earn their slot under the
+# institutional-memory framing using only tool_input + persisted state.
+
+version: 1
+event: PreToolUse
+matcher: "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return)_task$"
+hit_policy: collect
+
+rules:
+  # G1 — skipValidation bypass on any transition.
+  # This flag skips the ENTIRE BRE pipeline (no per-step override). It is
+  # not separately audited. A user or agent flipping it is opting out of
+  # governance — that should be a conscious choice, not a silent shortcut.
+  # Gate imposes institutional memory: "the system remembers skipValidation
+  # exists and surfaces the bypass moment so it's never reflexive."
+  - id: G1_skip_validation_bypass
+    when: "tool_input.skipValidation === true"
+    profiles: [hydro, scrum, shapeup]
+    severity: warning
+    permission_decision: ask
+    emit:
+      title: "Bypassing BRE validation for {{ event.tool_name }}"
+      body: |
+        `skipValidation: true` will skip the entire BRE pipeline (state gates, dependency gates, epic integrity, quality gates, and all methodology-specific steps).
+
+        This is not per-step — it is all-or-nothing. There is no audit differentiation between skipValidation-on-purpose and skipValidation-by-mistake.
+      cta: "Confirm you have a specific, recorded reason for bypassing governance. If you're responding to a BRE-blocked transition, the correct path is to remediate the underlying gate, not to skip all validation."
+
+  # G3 — approve when compliance is at or below D.
+  # Governance memory imposed: the system remembers compliance has slipped
+  # (state.last_compliance.grade), and surfaces that context at the moment
+  # the user/agent is about to add more approvals. Approving more work
+  # without addressing the slip compounds the problem — but sometimes it's
+  # the right move (e.g., clearing a small task during a recovery wave).
+  # Ask, don't deny.
+  - id: G3_approve_when_compliance_low
+    when: |
+      typeof event.tool_name === 'string' &&
+      event.tool_name.endsWith('approve_task') &&
+      state.last_compliance &&
+      (state.last_compliance.grade === 'D' || state.last_compliance.grade === 'F')
+    profiles: [hydro, scrum, shapeup]
+    severity: warning
+    permission_decision: ask
+    emit:
+      title: "Approving #{{ tool_input.issueNumber }} while compliance is grade {{ state.last_compliance.grade }}"
+      body: |
+        Last measured compliance grade: {{ state.last_compliance.grade }} (score {{ state.last_compliance.score }}).
+
+        Approving more tasks without addressing the underlying compliance weaknesses can compound the trajectory. Consider whether this approval belongs to a recovery plan, or whether it should wait on a /mcp__plugin_ido4dev_ido4__compliance review.
+      cta: "Confirm approval. A project-manager agent review is recommended if you proceed routinely in this state."

@@ -34,6 +34,28 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return)_task$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/pre-transition.rules.yaml\" || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/pre-assign-task.rules.yaml\" || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "mcp__plugin_ido4dev_ido4__validate_transition",

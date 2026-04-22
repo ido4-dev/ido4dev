@@ -50,3 +50,15 @@ rules:
         - {{{ . }}}
         {{/tool_response.integrity.violations}}
       cta: "Review the sibling tasks' containers before proceeding. This mistake tends to cascade — epic rollups get split and progress tracking becomes unreliable."
+
+# After every assignment, persist {issueNumber → container} into state.
+# Substrate for Stage 5's G5 re-assignment gate — the PreToolUse hook on
+# assign_task_to_* can then ask the user to confirm when the new container
+# differs from the last-recorded one. Institutional memory: the system
+# remembers where tasks were placed and surfaces moves as conscious decisions.
+post_evaluation:
+  persist:
+    last_assignments: |
+      (typeof tool_input.issueNumber === 'number' && typeof tool_response.container === 'string')
+        ? { ...(state.last_assignments || {}), [tool_input.issueNumber]: tool_response.container }
+        : (state.last_assignments || {})

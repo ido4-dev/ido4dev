@@ -471,17 +471,23 @@ check('read from corrupt file does not throw, returns emptyState', () => {
   assertEq(s.last_compliance, null, 'reset to empty');
 });
 
-check('coerce preserves valid fields and drops wrong types', () => {
+check('coerce type-checks critical fields and preserves unknown top-level fields', () => {
+  // Unknown top-level fields (like last_assignments added in Stage 4) are
+  // preserved unchanged — load-bearing for post_evaluation.persist rules that
+  // introduce new state keys. Critical fields still get type-coerced.
   const s = state.coerce({
     last_compliance: { grade: 'A' },
-    last_rule_fires: ['wrong type'],  // array should be rejected
-    open_findings: 'also wrong',      // string should be rejected
-    random_extra: 'ignored',
+    last_rule_fires: ['wrong type'],     // array should be reset
+    open_findings: 'also wrong',         // string should be reset
+    last_assignments: { 42: 'Wave 1' },  // unknown field — preserved
+    some_future_field: { arbitrary: true }, // also preserved
   });
   assertEq(s.last_compliance.grade, 'A', 'compliance kept');
   assertEq(s.last_rule_fires, {}, 'array last_rule_fires reset');
   assertEq(s.open_findings, [], 'non-array open_findings reset');
-  assertTrue(!('random_extra' in s), 'unknown field dropped');
+  assertEq(s.last_assignments, { 42: 'Wave 1' }, 'unknown field preserved');
+  assertEq(s.some_future_field, { arbitrary: true }, 'any unknown field preserved');
+  assertEq(s.version, 1, 'schema version stamped');
 });
 
 check('update applies mutator and stamps updated_at', () => {
@@ -727,6 +733,106 @@ check('validateRuleFile accepts well-formed post_evaluation.persist', () => {
     rules: [],
     post_evaluation: { persist: { last_compliance: '({ grade: tool_response.grade })' } },
   }, 'mem');
+});
+
+// ───────────────────────────────────────────────────────────────
+console.log('\n▸ permission_decision — PreToolUse gate support');
+
+check('rule with permission_decision: ask surfaces in finding + formatHookResponse emits PreToolUse shape', () => {
+  const file = rf([{
+    id: 'G1', when: 'true', permission_decision: 'ask',
+    emit: { title: 'Confirm bypass', body: 'skipValidation=true will skip BRE' },
+  }]);
+  file.event = 'PreToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  assertEq(res.findings[0].permission_decision, 'ask', 'finding carries decision');
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out.hookSpecificOutput.hookEventName, 'PreToolUse', 'hook event PreToolUse');
+  assertEq(out.hookSpecificOutput.permissionDecision, 'ask', 'permissionDecision emitted');
+  assertTrue(out.hookSpecificOutput.permissionDecisionReason.includes('Confirm bypass'), 'reason carries finding content');
+});
+
+check('multi-gate most-restrictive-wins: deny beats ask beats allow', () => {
+  const file = rf([
+    { id: 'A', when: 'true', permission_decision: 'allow', emit: { title: 'a' } },
+    { id: 'B', when: 'true', permission_decision: 'ask', emit: { title: 'b' } },
+    { id: 'C', when: 'true', permission_decision: 'deny', emit: { title: 'c' } },
+  ]);
+  file.event = 'PreToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out.hookSpecificOutput.permissionDecision, 'deny', 'deny wins');
+});
+
+check('ask beats allow when deny absent', () => {
+  const file = rf([
+    { id: 'A', when: 'true', permission_decision: 'allow', emit: { title: 'a' } },
+    { id: 'B', when: 'true', permission_decision: 'ask', emit: { title: 'b' } },
+  ]);
+  file.event = 'PreToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out.hookSpecificOutput.permissionDecision, 'ask', 'ask wins over allow');
+});
+
+check('PostToolUse file with no permission_decision retains existing shape (regression guard)', () => {
+  const file = rf([{ id: 'R', when: 'true', emit: { title: 'info' } }]);
+  file.event = 'PostToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out.hookSpecificOutput.hookEventName, 'PostToolUse', 'hookEventName');
+  assertTrue(out.hookSpecificOutput.additionalContext.includes('info'), 'additionalContext shipped');
+  assertTrue(!('permissionDecision' in out.hookSpecificOutput), 'no permissionDecision leaks into PostToolUse');
+});
+
+check('PreToolUse file with no fires returns empty response', () => {
+  const file = rf([{ id: 'R', when: 'false', permission_decision: 'ask', emit: { title: 'never' } }]);
+  file.event = 'PreToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out, {}, 'no-op when nothing fires');
+});
+
+check('PreToolUse finding with informational rule (no permission_decision) still emits additionalContext but no decision', () => {
+  const file = rf([{ id: 'INFO', when: 'true', emit: { title: 'just info' } }]);
+  file.event = 'PreToolUse';
+  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  const out = runner.formatHookResponse(ev({}, {}), res, file);
+  assertEq(out.hookSpecificOutput.hookEventName, 'PreToolUse', 'event stays PreToolUse');
+  assertTrue(!('permissionDecision' in out.hookSpecificOutput), 'no decision when no rule declared one');
+  assertTrue(out.hookSpecificOutput.additionalContext.includes('just info'), 'context still shipped');
+});
+
+check('validateRuleFile rejects invalid permission_decision values', () => {
+  try {
+    runner.validateRuleFile({ rules: [{ id: 'R', when: 'true', permission_decision: 'maybe' }] }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/permission_decision/.test(e.message), 'mentions permission_decision'); }
+});
+
+check('validateRuleFile rejects invalid event values', () => {
+  try {
+    runner.validateRuleFile({ event: 'Stop', rules: [] }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/event/.test(e.message), 'mentions event'); }
+});
+
+check('validateRuleFile accepts PreToolUse event + valid permission_decision', () => {
+  runner.validateRuleFile({
+    event: 'PreToolUse',
+    rules: [{ id: 'R', when: 'true', permission_decision: 'ask', emit: { title: 'ok' } }],
+  }, 'mem');
+});
+
+check('mostRestrictivePermission returns null for empty input', () => {
+  assertEq(runner.mostRestrictivePermission([]), null, 'null on empty');
+  assertEq(runner.mostRestrictivePermission([null, undefined]), null, 'null on all-null');
+});
+
+check('mostRestrictivePermission picks the strictest', () => {
+  assertEq(runner.mostRestrictivePermission(['allow']), 'allow', 'allow alone');
+  assertEq(runner.mostRestrictivePermission(['allow', 'ask']), 'ask', 'ask > allow');
+  assertEq(runner.mostRestrictivePermission(['ask', 'deny', 'allow']), 'deny', 'deny wins');
 });
 
 // ───────────────────────────────────────────────────────────────

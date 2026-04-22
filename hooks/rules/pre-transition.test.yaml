@@ -1,0 +1,149 @@
+# Test fixtures for pre-transition.rules.yaml.
+
+rule_file: pre-transition.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # G1 — skipValidation bypass (universal across transition tools)
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro: approve_task with skipValidation=true fires G1"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42, skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+      severity: warning
+      title_contains: "approve_task"
+      body_contains: "skipValidation: true"
+
+  - name: "scrum: start_task with skipValidation=true fires G1"
+    profile: scrum
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__start_task"
+      tool_input: { issueNumber: 101, skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+      title_contains: "start_task"
+
+  - name: "shapeup: block_task with skipValidation=true fires G1"
+    profile: shapeup
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__block_task"
+      tool_input: { issueNumber: 7, reason: "external dependency", skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+      title_contains: "block_task"
+
+  - name: "return_task with skipValidation=true fires G1"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__return_task"
+      tool_input: { issueNumber: 50, targetStatus: "IN_PROGRESS", reason: "revisit", skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+
+  # ────────────────────────────────────────────────────────────────
+  # G1 negative — skipValidation absent or false
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "skipValidation not set does NOT fire G1"
+    profile: hydro
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42 }
+    expect:
+      fired: []
+
+  - name: "skipValidation=false does NOT fire G1"
+    profile: scrum
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__start_task"
+      tool_input: { issueNumber: 100, skipValidation: false }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # G3 — approve_task when compliance grade is D or F
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "approve_task at grade D fires G3"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "D"
+        score: 52
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42 }
+    expect:
+      fired: [G3_approve_when_compliance_low]
+      severity: warning
+      title_contains: "#42"
+      body_contains: "grade: D"
+
+  - name: "approve_task at grade F fires G3 (scrum)"
+    profile: scrum
+    state_before:
+      last_compliance:
+        grade: "F"
+        score: 38
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 101 }
+    expect:
+      fired: [G3_approve_when_compliance_low]
+      body_contains: "grade: F"
+
+  # ────────────────────────────────────────────────────────────────
+  # G3 negative — grade not low, or different transition
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "approve_task at grade B does NOT fire G3"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "B"
+        score: 82
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42 }
+    expect:
+      fired: []
+
+  - name: "start_task at grade F does NOT fire G3 (wrong tool)"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "F"
+        score: 30
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__start_task"
+      tool_input: { issueNumber: 42 }
+    expect:
+      fired: []
+
+  - name: "approve_task with no prior compliance measurement does NOT fire G3"
+    profile: hydro
+    state_before: {}
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42 }
+    expect:
+      fired: []
+
+  # ────────────────────────────────────────────────────────────────
+  # Both gates fire: approve_task with skipValidation at grade D
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "approve_task with skipValidation=true AND grade D fires both G1 and G3"
+    profile: hydro
+    state_before:
+      last_compliance:
+        grade: "D"
+        score: 55
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__approve_task"
+      tool_input: { issueNumber: 42, skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass, G3_approve_when_compliance_low]

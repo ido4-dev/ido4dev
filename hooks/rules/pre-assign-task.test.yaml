@@ -1,0 +1,89 @@
+# Test fixtures for pre-assign-task.rules.yaml.
+
+rule_file: pre-assign-task.rules.yaml
+cases:
+  # ────────────────────────────────────────────────────────────────
+  # G5 — Re-assignment positive cases (each methodology's variant)
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "hydro wave: re-assigning #42 from Wave 1 to Wave 2 fires G5"
+    profile: hydro
+    state_before:
+      last_assignments:
+        "42": "Wave 1"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 2" }
+    expect:
+      fired: [G5_task_reassignment]
+      severity: info
+      title_contains: "Re-assigning #42"
+      body_contains: "previously recorded"
+
+  - name: "scrum sprint: re-assigning #101 to a new sprint fires G5"
+    profile: scrum
+    state_before:
+      last_assignments:
+        "101": "Sprint 5"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_sprint"
+      tool_input: { issueNumber: 101, sprintName: "Sprint 6" }
+    expect:
+      fired: [G5_task_reassignment]
+
+  - name: "shapeup cycle: re-assigning #7 to a new cycle fires G5"
+    profile: shapeup
+    state_before:
+      last_assignments:
+        "7": "Cycle 1"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_cycle"
+      tool_input: { issueNumber: 7, cycleName: "Cycle 2" }
+    expect:
+      fired: [G5_task_reassignment]
+
+  # ────────────────────────────────────────────────────────────────
+  # G5 negative — first assignment, same container, or no state
+  # ────────────────────────────────────────────────────────────────
+
+  - name: "first-ever assignment (no last_assignments entry for this issue) does NOT fire G5"
+    profile: hydro
+    state_before:
+      last_assignments: {}
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 1" }
+    expect:
+      fired: []
+
+  - name: "re-assignment to the SAME container (idempotent call) does NOT fire G5"
+    profile: hydro
+    state_before:
+      last_assignments:
+        "42": "Wave 1"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 1" }
+    expect:
+      fired: []
+
+  - name: "assignment of a DIFFERENT task (not in last_assignments) does NOT fire G5"
+    profile: hydro
+    state_before:
+      last_assignments:
+        "10": "Wave 1"
+        "20": "Wave 1"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 2" }
+    expect:
+      fired: []
+
+  - name: "no state.last_assignments at all does NOT fire G5"
+    profile: scrum
+    state_before: {}
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_sprint"
+      tool_input: { issueNumber: 101, sprintName: "Sprint 5" }
+    expect:
+      fired: []

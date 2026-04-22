@@ -32,25 +32,43 @@ function emptyState() {
   };
 }
 
-// Normalize an arbitrary parsed object into the schema shape. Preserves known
-// fields, drops unknown ones silently, replaces wrong-typed fields with their
-// default. Never throws.
+// Normalize an arbitrary parsed object into the schema shape.
+//
+// Known critical fields (last_compliance, last_rule_fires, open_findings) are
+// type-checked and defaulted; malformed values are replaced with their defaults.
+// All OTHER top-level fields are preserved unchanged — this is load-bearing for
+// post_evaluation.persist rules that introduce new state fields (e.g.
+// last_assignments added in Stage 4) without requiring state.js schema changes.
+// Rules trust themselves to write coherent values; state.js doesn't second-guess.
+//
+// Never throws.
 function coerce(raw) {
-  const s = emptyState();
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return s;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return emptyState();
 
-  if (raw.last_compliance && typeof raw.last_compliance === 'object' && !Array.isArray(raw.last_compliance)) {
-    s.last_compliance = raw.last_compliance;
+  // Start by copying through every non-critical top-level field as-is.
+  const s = { ...raw };
+
+  // Stamp canonical schema version.
+  s.version = SCHEMA_VERSION;
+
+  // Type-check + default the critical fields. Malformed types get replaced.
+  if (!raw.last_compliance || typeof raw.last_compliance !== 'object' || Array.isArray(raw.last_compliance)) {
+    s.last_compliance = null;
   }
-  if (raw.last_rule_fires && typeof raw.last_rule_fires === 'object' && !Array.isArray(raw.last_rule_fires)) {
+  if (!raw.last_rule_fires || typeof raw.last_rule_fires !== 'object' || Array.isArray(raw.last_rule_fires)) {
+    s.last_rule_fires = {};
+  } else {
     s.last_rule_fires = { ...raw.last_rule_fires };
   }
-  if (Array.isArray(raw.open_findings)) {
+  if (!Array.isArray(raw.open_findings)) {
+    s.open_findings = [];
+  } else {
     s.open_findings = [...raw.open_findings];
   }
-  if (typeof raw.session_id === 'string') s.session_id = raw.session_id;
-  if (typeof raw.updated_at === 'string') s.updated_at = raw.updated_at;
-  if (typeof raw.ended_at === 'string') s.ended_at = raw.ended_at;
+  // Drop wrong-typed metadata strings rather than preserving garbage.
+  if (raw.session_id !== undefined && typeof raw.session_id !== 'string') delete s.session_id;
+  if (raw.updated_at !== undefined && typeof raw.updated_at !== 'string') delete s.updated_at;
+  if (raw.ended_at !== undefined && typeof raw.ended_at !== 'string') delete s.ended_at;
 
   return s;
 }

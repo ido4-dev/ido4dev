@@ -533,8 +533,7 @@ else
 fi
 
 # No PostToolUse matcher should still use "type": "prompt" for matchers we've
-# migrated. Currently migrated: validate_transition. Extend this list as
-# Stage 4 rewrites land.
+# migrated. List expands as Phase 3 stages land.
 MIGRATED_MATCHERS="validate_transition assign_task_to_ compute_compliance_score complete_and_handoff"
 if [ -f hooks/hooks.json ]; then
   PROMPT_VIOLATIONS=0
@@ -557,6 +556,59 @@ sys.exit(0)
       PROMPT_VIOLATIONS=$((PROMPT_VIOLATIONS + 1))
     fi
   done
+
+  # PreToolUse gates (Stage 5): confirm the two expected hook groups are wired
+  # and invoke the rule-runner.
+  PRE_EXPECTED="pre-transition pre-assign-task"
+  for PRE in $PRE_EXPECTED; do
+    if python3 -c "
+import json, sys
+d = json.load(open('hooks/hooks.json'))
+pre = d.get('hooks', {}).get('PreToolUse', [])
+for group in pre:
+    for h in group.get('hooks', []):
+        cmd = h.get('command', '') if h.get('type') == 'command' else ''
+        if '$PRE.rules.yaml' in cmd:
+            sys.exit(0)
+sys.exit(1)
+" 2>/dev/null; then
+      pass "PreToolUse hook wired to hooks/rules/$PRE.rules.yaml"
+    else
+      fail "PreToolUse hook missing for $PRE.rules.yaml"
+    fi
+  done
+fi
+
+# Rule-file event field coherence: each *.rules.yaml should declare event: and
+# it should match where it's wired in hooks.json (PreToolUse file wired under
+# PreToolUse; PostToolUse file wired under PostToolUse).
+if [ -f hooks/hooks.json ] && command -v python3 &>/dev/null; then
+  EVENT_MISMATCH=0
+  for RF in hooks/rules/*.rules.yaml; do
+    [ -f "$RF" ] || continue
+    DECLARED_EVENT=$(grep -E '^event:' "$RF" | head -1 | awk '{print $2}' | tr -d '"')
+    BASENAME=$(basename "$RF" .rules.yaml)
+    if [ -z "$DECLARED_EVENT" ]; then
+      # No event field — skip (back-compat; rules default to PostToolUse)
+      continue
+    fi
+    # Check hooks.json has an entry under DECLARED_EVENT that references this file
+    if ! python3 -c "
+import json, sys
+d = json.load(open('hooks/hooks.json'))
+entries = d.get('hooks', {}).get('$DECLARED_EVENT', [])
+for group in entries:
+    for h in group.get('hooks', []):
+        cmd = h.get('command', '') if h.get('type') == 'command' else ''
+        if '$BASENAME.rules.yaml' in cmd:
+            sys.exit(0)
+sys.exit(1)
+" 2>/dev/null; then
+      fail "rule file $RF declares event: $DECLARED_EVENT but is not wired under that event in hooks.json"
+      EVENT_MISMATCH=$((EVENT_MISMATCH + 1))
+    fi
+  done
+  [ "$EVENT_MISMATCH" = "0" ] && pass "rule file event: declarations match hooks.json wiring"
 fi
 
 # ─── J. Claude Code Native Validation ───

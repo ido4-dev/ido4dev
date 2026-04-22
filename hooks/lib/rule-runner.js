@@ -50,6 +50,24 @@ const state = require('./state.js');
 
 const DEFAULT_HIT_POLICY = 'collect';
 const VALID_HIT_POLICIES = new Set(['first', 'collect', 'unique']);
+const VALID_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse']);
+const VALID_PERMISSION_DECISIONS = new Set(['allow', 'ask', 'deny']);
+
+// Most-restrictive ordering for multi-rule PreToolUse gates:
+// deny > ask > allow. When multiple rules fire with permission_decision,
+// the runner picks the highest-severity decision per Claude Code's
+// precedence rules.
+const PERMISSION_DECISION_SEVERITY = { allow: 0, ask: 1, deny: 2 };
+function mostRestrictivePermission(decisions) {
+  let winner = null;
+  for (const d of decisions) {
+    if (!d) continue;
+    if (!winner || PERMISSION_DECISION_SEVERITY[d] > PERMISSION_DECISION_SEVERITY[winner]) {
+      winner = d;
+    }
+  }
+  return winner;
+}
 
 function warn(msg) {
   process.stderr.write(`[rule-runner] ${msg}\n`);
@@ -77,6 +95,9 @@ function validateRuleFile(doc, filePath) {
   if (!Array.isArray(doc.rules)) {
     throw new Error(`Rule file ${filePath}: "rules" must be an array`);
   }
+  if (doc.event !== undefined && !VALID_HOOK_EVENTS.has(doc.event)) {
+    throw new Error(`Rule file ${filePath}: "event" must be one of ${[...VALID_HOOK_EVENTS].join(', ')}`);
+  }
   if (doc.hit_policy && !VALID_HIT_POLICIES.has(doc.hit_policy)) {
     throw new Error(`Rule file ${filePath}: hit_policy "${doc.hit_policy}" is not one of ${[...VALID_HIT_POLICIES].join(', ')}`);
   }
@@ -103,6 +124,9 @@ function validateRuleFile(doc, filePath) {
     }
     if (r.escalate_mode !== undefined && r.escalate_mode !== 'additionalContext' && r.escalate_mode !== 'direct') {
       throw new Error(`Rule file ${filePath}: rule ${r.id} "escalate_mode" must be "additionalContext" or "direct"`);
+    }
+    if (r.permission_decision !== undefined && !VALID_PERMISSION_DECISIONS.has(r.permission_decision)) {
+      throw new Error(`Rule file ${filePath}: rule ${r.id} "permission_decision" must be one of ${[...VALID_PERMISSION_DECISIONS].join(', ')}`);
     }
   }
   if (doc.post_evaluation !== undefined) {
@@ -257,11 +281,15 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
     if (debounced) continue;
 
     const emit = renderEmit(rule.emit, ctx);
-    findings.push({
+    const finding = {
       rule_id: rule.id,
       severity: rule.severity || 'info',
       ...emit,
-    });
+    };
+    if (rule.permission_decision) {
+      finding.permission_decision = rule.permission_decision;
+    }
+    findings.push(finding);
 
     if (rule.escalate_to) {
       escalate.push({
@@ -302,7 +330,7 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
 // ────────────────────────────────────────────────────────────────
 // Claude Code hook response shaping
 
-function formatHookResponse(event, result) {
+function formatHookResponse(event, result, ruleFile) {
   if (result.findings.length === 0 && result.escalate.length === 0) {
     return {}; // no-op response; Claude Code treats as allow/continue
   }
@@ -323,11 +351,45 @@ function formatHookResponse(event, result) {
 
   const additionalContext = [...blocks, ...escalateBlocks].filter(Boolean).join('\n\n---\n\n');
 
+  // Determine the event type: prefer the rule file's declared event (trustworthy
+  // at author-time), fall back to the event payload's hook_event_name, then
+  // default to PostToolUse for back-compat with existing callers that pass only
+  // the event arg.
+  const hookEventName = (ruleFile && ruleFile.event)
+    || (event && event.hook_event_name)
+    || 'PostToolUse';
+
+  if (hookEventName === 'PreToolUse') {
+    // PreToolUse: collect any permission_decision from fired findings;
+    // apply most-restrictive-wins; emit the PreToolUse response shape.
+    const decisions = result.findings
+      .map((f) => f.permission_decision)
+      .filter(Boolean);
+    const decision = mostRestrictivePermission(decisions);
+
+    if (!decision && !additionalContext) return {};
+
+    const out = {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+      },
+    };
+    if (decision) {
+      out.hookSpecificOutput.permissionDecision = decision;
+      // permissionDecisionReason is shown to Claude when the decision is deny,
+      // and included when prompting for ask. Populate from rendered findings.
+      if (additionalContext) out.hookSpecificOutput.permissionDecisionReason = additionalContext;
+    }
+    if (additionalContext) out.hookSpecificOutput.additionalContext = additionalContext;
+    return out;
+  }
+
+  // PostToolUse (default) — existing shape.
   if (!additionalContext) return {};
 
   return {
     hookSpecificOutput: {
-      hookEventName: event && event.hook_event_name ? event.hook_event_name : 'PostToolUse',
+      hookEventName,
       additionalContext,
     },
   };
@@ -382,7 +444,7 @@ async function runFromStdin({ ruleFilePath, profilePath, stateFilePath, now = Da
     }
   }
 
-  const response = formatHookResponse(event, result);
+  const response = formatHookResponse(event, result, ruleFile);
   process.stdout.write(JSON.stringify(response) + '\n');
 }
 
@@ -440,4 +502,7 @@ module.exports = {
   // Constants
   DEFAULT_HIT_POLICY,
   VALID_HIT_POLICIES,
+  VALID_HOOK_EVENTS,
+  VALID_PERMISSION_DECISIONS,
+  mostRestrictivePermission,
 };

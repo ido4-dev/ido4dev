@@ -27,6 +27,9 @@ cases:
       severity: warning
       title_contains: "#42 → Wave 2"
       body_contains: "split epic"
+      state_after_merge:
+        last_assignments:
+          "42": "Wave 2"
 
   - name: "scrum sprint: integrity maintained=false fires AT001"
     profile: scrum
@@ -83,7 +86,7 @@ cases:
   # AT001 negative — integrity maintained
   # ────────────────────────────────────────────────────────────────
 
-  - name: "clean assignment (integrity.maintained=true) fires nothing"
+  - name: "clean assignment (integrity.maintained=true) fires nothing, but persists the assignment"
     profile: hydro
     input:
       tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
@@ -96,6 +99,32 @@ cases:
           violations: []
     expect:
       fired: []
+      state_after_merge:
+        last_assignments:
+          "42": "Wave 1"
+
+  - name: "assignment merges into existing last_assignments (doesn't overwrite prior)"
+    profile: hydro
+    state_before:
+      last_assignments:
+        "10": "Wave 1"
+        "20": "Wave 1"
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__assign_task_to_wave"
+      tool_input: { issueNumber: 42, waveName: "Wave 2" }
+      tool_response:
+        issueNumber: 42
+        container: "Wave 2"
+        integrity:
+          maintained: true
+          violations: []
+    expect:
+      fired: []
+      state_after_merge:
+        last_assignments:
+          "10": "Wave 1"
+          "20": "Wave 1"
+          "42": "Wave 2"
 
   - name: "missing integrity object (defensive): silent"
     profile: hydro

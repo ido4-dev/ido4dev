@@ -1,0 +1,48 @@
+# PreToolUse gate on assign_task_to_* — catches accidental task re-assignment.
+#
+# The assign_task_to_{wave,sprint,cycle} tools don't distinguish "first
+# assignment" from "re-assignment" in their schemas. An AI agent (or
+# human) can easily re-assign a task to a different container by mistake,
+# and the existing post-hoc AT001 integrity rule (in assign-task.rules.yaml)
+# only catches cases where the move breaks epic-container consistency.
+# Simple moves that preserve integrity but were unintended will slip
+# through silently otherwise.
+#
+# Substrate: assign-task.rules.yaml's `post_evaluation.persist.last_assignments`
+# stamps `state.last_assignments[issueNumber] = container` after every
+# successful assignment. This gate compares the new container against the
+# prior one and asks for confirmation on a mismatch.
+#
+# Thesis framing: the system remembers where each task was placed. An
+# assignment that moves it somewhere new is a conscious decision, not an
+# accident — the gate makes it conscious.
+
+version: 1
+event: PreToolUse
+matcher: "^mcp__plugin_ido4dev_ido4__assign_task_to_(wave|sprint|cycle)$"
+hit_policy: collect
+
+rules:
+  # G5 — Re-assignment of a task already placed in a different container.
+  # Extracts the new container name from tool_input — the field name varies
+  # by tool variant (waveName / sprintName / cycleName). We use the first
+  # non-empty string.
+  - id: G5_task_reassignment
+    when: |
+      typeof tool_input.issueNumber === 'number' &&
+      state.last_assignments &&
+      typeof state.last_assignments[tool_input.issueNumber] === 'string' &&
+      (() => {
+        const newContainer = tool_input.waveName || tool_input.sprintName || tool_input.cycleName;
+        return typeof newContainer === 'string' && newContainer !== state.last_assignments[tool_input.issueNumber];
+      })()
+    profiles: [hydro, scrum, shapeup]
+    severity: info
+    permission_decision: ask
+    emit:
+      title: "Re-assigning #{{ tool_input.issueNumber }} to a different container"
+      body: |
+        Task #{{ tool_input.issueNumber }} was previously recorded in a different container. The current assignment moves it somewhere new.
+
+        Re-assignment changes how the task is surfaced in wave/sprint/cycle reports, can affect dependency/cascade calculations, and may split epics if sibling tasks stay behind. Check `state.last_assignments` in the hook state to see the prior container, and the tool_input parameters for the new one.
+      cta: "Confirm this is an intentional move (re-scoping, replanning, rebalancing), not an accidental re-direct."

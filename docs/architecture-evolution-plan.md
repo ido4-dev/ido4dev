@@ -349,6 +349,31 @@ The PM agent's principles, state machine, and lifecycle should load from the pro
 
 Autonomous PM relies on `CronCreate` for scheduled check-ins. Need to verify the API exists in current Claude Code, semantics (per-session vs persistent, frequency limits), and whether `CronCreate` registrations survive across sessions.
 
+### 7.7 Event log promotion — when does `state.json` upgrade to `events.ndjson`?
+
+Phase 3 shipped the simpler of two layered patterns from `~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md`: §4.6 (state.json summary) rather than §4.7 (append-only event log). The choice was deliberate YAGNI — no Phase 3 rule required cross-session event history; shipping rotation, schema versioning, and query API for a use case no current rule needs would be adoption-for-adoption's-sake (§5.2 anti-pattern).
+
+However, several rules that would create real governance value were deferred because they require this infrastructure. Tracking them here so the upgrade trigger is visible and future sessions don't re-litigate.
+
+**Concrete pending triggers (rules that would earn the upgrade):**
+
+1. **Gate `approve_task` when there's no preceding `review_task` on this issue in the same session** — classic "skipping a ceremony" pattern; the BRE already enforces state machine constraints but can't detect the *temporal* pattern of "you never actually reviewed this." Requires: per-issue transition history scoped to the session.
+2. **Gate retry of a transition that just failed BRE validation** — detects the "keep trying until it works" anti-pattern (often with `skipValidation`). Requires: event stream of recent validation failures, queryable by issue + transition type.
+3. **"Task X has been blocking Y over 3 sessions"** — cross-session pattern detection; the blocker keeps being noted in handoff but nobody acts. Requires: multi-session event history + a query like "tasks blocking others for N sessions."
+4. **"Agent tends to skip reviews — 3-session pattern"** — behavioral-trend rule; requires per-agent transition history across sessions.
+5. **"Epic E now spans containers C1 and C2" (observed from session)** — the preventive version of Stage 4's post-hoc AT001 integrity rule. Requires: epic-container tracking across time, not just the current snapshot.
+
+Any one of these rules, if it becomes concrete enough to write, triggers the upgrade work.
+
+**Upgrade work (when triggered):**
+
+1. Extend `hooks/lib/rule-runner.js` to append one NDJSON event per invocation to `${CLAUDE_PLUGIN_DATA}/hooks/events.ndjson` alongside the existing `state.json` update.
+2. Add rotation (10 MB or 30 days, keep 3 rotated files gzipped — total bounded ~40 MB).
+3. Add a query API the runner exposes to rules (e.g., `state.query_events({since, matching})` callable from `when:` expressions).
+4. Update `hook-and-rule-strategy.md §4.7` to reflect the promotion, and this §7.7 to record the resolution.
+
+**Current thinking:** defer until Phase 4 at earliest. The first concrete rule is likely to surface during Phase 4's PM agent work — behavioral-pattern rules are the PM agent's natural territory. If Phase 4 can achieve its goals with the current state.json substrate, defer further. Avoid the premature-abstraction anti-pattern; the log is architecturally correct but currently YAGNI.
+
 ---
 
 ## 8. Workstreams

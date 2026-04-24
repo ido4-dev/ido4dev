@@ -59,7 +59,8 @@ The plugin is undergoing a multi-phase reshape codified at `~/dev-projects/ido4d
   - Stage 5 ✓ commit `62d06fa` (ido4dev) + `cad3358` (ido4-suite) — Three PreToolUse gates: G1 universal `skipValidation=true`, G3 `approve_task` when compliance is D/F, G5 re-assignment. Runner extended with `permission_decision` + `event:` + PreToolUse response shape. Side-finding: `state.js coerce()` was dropping unknown top-level fields; fixed + regression-guarded.
   - **Stage 6 ✗ SKIPPED (2026-04-22)** — PostCompact hook not implemented in current Claude Code; memory-system auto-reload covers the underlying concern; rare compaction on 1M-context Opus 4.7. Broader memory-architecture investigation tracked at `architecture-evolution-plan.md §7.8` for a separate future session.
   - Stage 7 ✓ commit `7ad24c8` (2026-04-24) — `escalate_mode` field removed as dead code (unimplementable — no runtime hook-to-agent delegation primitive in Claude Code; SOTA for governance escalation is advisory, not forced). `result.escalate[]` simplified; recommendation wording strengthened to `**Governance signal — recommend invoking \`/agents <name>\`**`. Research correction #4 in Phase 3.
-  - Stages 8–9 remaining: docs (`hook-architecture.md` + CLAUDE.md §Hook Architecture section — Stage 8), closing smoke test (`reports/e2e-005-phase-3-smoke.md` — Stage 9, user-driven).
+  - Stage 8 ✓ (2026-04-24) — new `docs/hook-architecture.md` (canonical plugin-side reference, mirrors `mcp-runtime-contract.md` style); `CLAUDE.md §Hook Architecture` section added with cross-references and extension-procedure pointer.
+  - Stage 9 remaining: closing smoke test (`reports/e2e-005-phase-3-smoke.md` — user-driven live verification against a real ido4 project).
   - Stage 3.5 (optional cross-repo beat — close the `mcp-runtime-contract.md:76` cascade-info drift via a ~5-LOC enrichment in `@ido4/mcp`'s handler) is named but deferred; no Stage 4 rule required it.
 - **Phase 4** (PM agent autonomy, WS3) — sequenced after Phase 3 closes. Depends on the Phase 3 substrate (state layer, `escalate_to` slot, `last_compliance` trajectory, stateful-rule pattern). Brief deferred until Phase 3's live smoke test lands — writing a Phase 4 brief before lived experience would repeat the Stage 3 research-correction mistake. Open investigations in `architecture-evolution-plan.md`: §7.6 (`CronCreate` availability), §7.7 (event-log promotion), §7.8 (memory architecture — cross-cutting).
 
@@ -92,6 +93,28 @@ This matches the dual-bundle pattern already used by `ido4specs` and `ido4shape`
 **Release gate:** `scripts/release.sh` runs `check_bundle` in Layer 1 pre-flight: refuses to release if the bundle is missing or missing its version header, warns interactively on drift against npm (`--yes` flag skips the prompt).
 
 The purpose is to close the "parses upstream in `ido4specs:validate-spec` but fails downstream in `ido4dev:ingest-spec`" seam — same parser, same version on both sides of the trust boundary.
+
+## Hook Architecture
+
+The plugin's hook layer — delivered by Phase 3 — is a deterministic rule-runner with YAML rule files evaluated against live hook events, backed by a small `state.json` substrate. Full details: **`~/dev-projects/ido4dev/docs/hook-architecture.md`** (canonical reference, extension procedure, failure modes, current rule inventory).
+
+**What lives where:**
+- `hooks/hooks.json` — Claude Code hook entries (SessionStart/SessionEnd + PreToolUse + PostToolUse)
+- `hooks/lib/rule-runner.js` — the pure-Node evaluator (zero runtime npm deps)
+- `hooks/lib/state.js` — `state.json` read/write wrapper
+- `hooks/lib/vendored/` — version-locked js-yaml + mustache UMD bundles
+- `hooks/rules/*.rules.yaml` — one rule file per matcher group; sibling `*.test.yaml` fixtures
+- `hooks/scripts/*.{sh,js}` — hook-entry shims (SessionStart install/bundle/banner; SessionEnd state)
+
+**Design principles (enforced, not aspirational):**
+- **§3.1 — BRE is deterministic; LLM is for judgment, not enforcement.** The rule-runner never invokes an LLM. Rule files process structured tool responses through deterministic expressions (`when:`), templated output (Mustache `emit:`), and advisory escalation (`escalate_to:` recommending delegation to a named agent).
+- **§3.9 — Institutional memory as the operating substrate.** Every rule passes the "earn its slot" test: does it operationalize memory the system has that the user or agent needs imposed now? If not, it's noise.
+- **Distribution by signal origin.** Cascade rules live on `complete_and_handoff` (where the signal exists), not on `validate_transition` (which never returns cascade info). Always verify the signal shape before writing rules — four Phase 3 stages had research corrections on brief-assumed fields that didn't exist.
+- **Silence is a feature.** Fewer rules with higher signal > many rules with low specificity. Stage 4 audit cut 2 of 7 sketched rules as noise.
+
+**Extension procedure (adding a rule):** see `docs/hook-architecture.md` §"How to add a new rule file" — choose matcher, verify signal shape in `@ido4/mcp`, write rules against real fields, use triple-brace Mustache for prose, create sibling test fixture, wire hooks.json, update MIGRATED_MATCHERS in `validate-plugin.sh`, run tests.
+
+**Standing reference for design decisions:** `~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md` defines suite-level principles, canonical patterns (§4), and anti-patterns (§5). Read that doc to decide *whether* a new pattern earns its slot; read `docs/hook-architecture.md` to figure out *how* to implement it in this plugin.
 
 ## Skill Conventions
 

@@ -254,11 +254,59 @@ function shouldDebounce(rule, ctx, stateIn, now) {
 // ────────────────────────────────────────────────────────────────
 // Core evaluation — pure function, no I/O
 
+// Unwrap an MCP CallToolResult envelope.
+//
+// Live Claude Code hooks receive `tool_response` as the raw MCP CallToolResult:
+//   { content: [{ type: "text", text: "<JSON STRING>" }], isError?: boolean }
+//
+// Where the actual tool data is JSON-encoded inside `content[0].text`. Claude's
+// own conversation UI parses this for display, but the hook subprocess sees
+// the unparsed wrapper. Without this helper, every PostToolUse rule's
+// `tool_response.X` access errors on undefined.
+//
+// Discovered during Phase 3 Stage 9 smoke-test, 2026-04-25 — three rules in
+// compliance-score.rules.yaml threw "Cannot read properties of undefined
+// (reading 'grade')" because tool_response.data was undefined; data lived
+// inside content[0].text as JSON.
+//
+// Pass-through behavior for non-MCP shapes preserves the integration-test
+// fixture path, where fixtures supply the already-parsed `{success, data}`
+// directly.
+function unwrapMcpToolResponse(toolResponse) {
+  if (!toolResponse) return toolResponse;
+  // Claude Code v2.1.119 passes tool_response as the MCP CallToolResult's
+  // content array directly (e.g. `[{type:"text", text:"<JSON>"}]`), not as
+  // an object containing a `content` field. Earlier MCP versions / docs
+  // suggested the latter shape, so we handle both defensively.
+  let contentArray = null;
+  if (Array.isArray(toolResponse)) {
+    contentArray = toolResponse;
+  } else if (typeof toolResponse === 'object' && Array.isArray(toolResponse.content)) {
+    contentArray = toolResponse.content;
+  }
+  if (
+    contentArray &&
+    contentArray.length > 0 &&
+    contentArray[0] &&
+    contentArray[0].type === 'text' &&
+    typeof contentArray[0].text === 'string'
+  ) {
+    try {
+      return JSON.parse(contentArray[0].text);
+    } catch (e) {
+      warn(`tool_response: content[0].text was not valid JSON — passing through unparsed (${e.message})`);
+      return toolResponse;
+    }
+  }
+  return toolResponse;
+}
+
 function evaluate({ ruleFile, event, profile, profileValues, state: currentState, now }) {
   const nowMs = typeof now === 'number' ? now : Date.now();
+  const rawToolResponse = (event && event.tool_response) || {};
   const ctx = {
     tool_input: (event && event.tool_input) || {},
-    tool_response: (event && event.tool_response) || {},
+    tool_response: unwrapMcpToolResponse(rawToolResponse),
     profile,
     profile_values: profileValues || {},
     state: currentState || state.emptyState(),
@@ -493,6 +541,7 @@ module.exports = {
   filterByProfile,
   evalWhen,
   evalExpr,
+  unwrapMcpToolResponse,
   renderString,
   renderEmit,
   shouldDebounce,

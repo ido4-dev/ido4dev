@@ -28,17 +28,17 @@ rules:
   # tasks that are now ready. Operationalizes institutional memory: the
   # agent/human doesn't have to reconstruct "what's ready now."
   - id: CH001_cascade_unblock
-    when: "Array.isArray(tool_response.newlyUnblocked) && tool_response.newlyUnblocked.length > 0"
+    when: "Array.isArray(tool_response.data.newlyUnblocked) && tool_response.data.newlyUnblocked.length > 0"
     profiles: [hydro, scrum, shapeup]
     severity: info
     emit:
-      title: "Completing #{{ tool_response.completed.issueNumber }} unblocks {{ tool_response.newlyUnblocked.length }} downstream task(s)"
+      title: "Completing #{{ tool_response.data.completed.issueNumber }} unblocks {{ tool_response.data.newlyUnblocked.length }} downstream task(s)"
       body: |
         Newly ready to start:
-        {{#tool_response.newlyUnblocked}}
+        {{#tool_response.data.newlyUnblocked}}
         - #{{ issueNumber }} {{{ title }}} — {{{ reasoning }}}{{#recommendedAgent}} (recommended: {{{ recommendedAgent }}}){{/recommendedAgent}}
-        {{/tool_response.newlyUnblocked}}
-      cta: "Consider picking one up to preserve momentum — these were blocked on #{{ tool_response.completed.issueNumber }}."
+        {{/tool_response.data.newlyUnblocked}}
+      cta: "Consider picking one up to preserve momentum — these were blocked on #{{ tool_response.data.completed.issueNumber }}."
 
   # CH002 — The system recommends a specific next task with non-trivial
   # downstream leverage. Surfaces the *reasoning* (cascadeValue, momentum,
@@ -48,22 +48,22 @@ rules:
   # least one dimension. Silence when the recommendation is weak/neutral.
   - id: CH002_strong_next_recommendation
     when: |
-      tool_response.agentNextTask &&
-      tool_response.agentNextTask.recommendation &&
-      tool_response.agentNextTask.recommendation.scoreBreakdown &&
+      tool_response.data.agentNextTask &&
+      tool_response.data.agentNextTask.recommendation &&
+      tool_response.data.agentNextTask.recommendation.scoreBreakdown &&
       (
-        tool_response.agentNextTask.recommendation.scoreBreakdown.cascadeValue >= 15 ||
-        tool_response.agentNextTask.recommendation.scoreBreakdown.epicMomentum >= 15
+        tool_response.data.agentNextTask.recommendation.scoreBreakdown.cascadeValue >= 15 ||
+        tool_response.data.agentNextTask.recommendation.scoreBreakdown.epicMomentum >= 15
       )
     profiles: [hydro, scrum, shapeup]
     severity: info
     emit:
-      title: "Recommended next: #{{ tool_response.agentNextTask.recommendation.issueNumber }} {{{ tool_response.agentNextTask.recommendation.title }}} (score {{ tool_response.agentNextTask.recommendation.score }})"
+      title: "Recommended next: #{{ tool_response.data.agentNextTask.recommendation.issueNumber }} {{{ tool_response.data.agentNextTask.recommendation.title }}} (score {{ tool_response.data.agentNextTask.recommendation.score }})"
       body: |
-        {{{ tool_response.agentNextTask.recommendation.reasoning }}}
+        {{{ tool_response.data.agentNextTask.recommendation.reasoning }}}
 
         Why this is the right next task:
-        - cascade leverage: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.cascadeValue }}/40
-        - epic momentum: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.epicMomentum }}/25
-        - capability match: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.capabilityMatch }}/20
-        - dependency freshness: {{ tool_response.agentNextTask.recommendation.scoreBreakdown.dependencyFreshness }}/15
+        - cascade leverage: {{ tool_response.data.agentNextTask.recommendation.scoreBreakdown.cascadeValue }}/40
+        - epic momentum: {{ tool_response.data.agentNextTask.recommendation.scoreBreakdown.epicMomentum }}/25
+        - capability match: {{ tool_response.data.agentNextTask.recommendation.scoreBreakdown.capabilityMatch }}/20
+        - dependency freshness: {{ tool_response.data.agentNextTask.recommendation.scoreBreakdown.dependencyFreshness }}/15

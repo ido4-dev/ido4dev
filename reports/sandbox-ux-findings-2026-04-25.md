@@ -125,6 +125,30 @@ The sandbox invocation failed twice — once due to an empty-repo issue (runbook
 - If a mid-flight failure occurs, attempt best-effort cleanup (delete issues created in this invocation).
 - At minimum, report loudly what was partially created so the user can clean up themselves.
 
+### OBS-09: Deleting the sandbox repo does not clean up the associated GitHub Project v2
+
+**Severity:** ARCHITECTURAL — trust issue, related to OBS-07
+
+**Repro:**
+1. Run `create_sandbox` (even a partially-failing one) against a throwaway repo — the tool creates a GitHub Project v2 linked to that repo (e.g., *"ido4 Sandbox — Hydro Governance"*).
+2. Delete the repo: `gh repo delete <repo> --yes`.
+3. List projects: `gh project list --owner <user>` — the project still exists, now orphaned.
+
+**Expected:** either (a) the project lifecycle is tied to the repo, or (b) sandbox explicitly manages project cleanup as part of its teardown contract, or (c) the documentation warns users that projects persist after repo deletion.
+
+**Actual:** the project silently outlives the repo. Every sandbox invocation — successful OR failed — creates a project. In production over time, users would accumulate dozens of orphan "ido4 Sandbox" projects on their GitHub account.
+
+**Impact:** trust erosion + noise on user's GitHub account. Especially bad if sandbox is used for demos or experimentation — each demo session leaves a permanent artifact until manually deleted.
+
+**Discovered during:** Phase 3 Stage 9 smoke-test prep, while recreating the throwaway repo for an Option A retry. Cleaning the repo wasn't sufficient; we also had to manually `gh project delete` the orphan.
+
+**Candidate fixes:**
+- Sandbox teardown contract should delete both repo AND associated project (explicit cleanup).
+- Or: use GitHub API to set a "cascade delete on repo deletion" hint if one exists (unlikely — Projects v2 are explicitly repo-independent).
+- At minimum, document that users must manually delete the project after a sandbox session.
+
+---
+
 ### OBS-08: Partial sandbox state leaves the scenario non-functional for ido4 tools
 
 **Severity:** Derivative of OBS-06/07 (symptom, not separate root cause)
@@ -150,6 +174,7 @@ Consequence: `validate_transition` and `compute_compliance_score` against this p
 | OBS-06 | **Architectural — data integrity** | Transactional model | **High** |
 | OBS-07 | **Architectural — user trust** | Transactional model | **High** |
 | OBS-08 | Derivative of OBS-06/07 | — | Resolved with above |
+| OBS-09 | **Architectural — trust / account pollution** | Project teardown | **High** |
 
 ## Proposed follow-up initiative
 

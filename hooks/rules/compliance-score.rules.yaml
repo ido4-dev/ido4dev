@@ -30,17 +30,17 @@ rules:
     when: |
       state.last_compliance &&
       typeof state.last_compliance.grade === 'string' &&
-      'ABCDF'.indexOf(tool_response.grade) > 'ABCDF'.indexOf(state.last_compliance.grade)
+      'ABCDF'.indexOf(tool_response.data.grade) > 'ABCDF'.indexOf(state.last_compliance.grade)
     profiles: [hydro, scrum, shapeup]
     severity: warning
     escalate_to: project-manager
     emit:
-      title: "Compliance grade dropped: {{ state.last_compliance.grade }} → {{ tool_response.grade }}"
+      title: "Compliance grade dropped: {{ state.last_compliance.grade }} → {{ tool_response.data.grade }}"
       body: |
         Previous measurement: grade {{ state.last_compliance.grade }} (score {{ state.last_compliance.score }})
-        Current measurement:  grade {{ tool_response.grade }} (score {{ tool_response.score }})
+        Current measurement:  grade {{ tool_response.data.grade }} (score {{ tool_response.data.score }})
 
-        {{{ tool_response.summary }}}
+        {{{ tool_response.data.summary }}}
       cta: "Review categories below and address the weakest before it compounds. A project-manager agent review is recommended."
 
   # CS002 — Category crossed a threshold it hadn't crossed before.
@@ -57,17 +57,17 @@ rules:
     when: |
       state.last_compliance &&
       state.last_compliance.categories &&
-      Object.keys(tool_response.categories).some(k => {
-        const curr = tool_response.categories[k];
+      Object.keys(tool_response.data.categories).some(k => {
+        const curr = tool_response.data.categories[k];
         const prev = state.last_compliance.categories[k];
         return curr && prev && curr.score < 70 && prev.score >= 70;
       })
     profiles: [hydro, scrum, shapeup]
     severity: warning
     emit:
-      title: "A compliance category dropped below 70 this measurement (grade {{ tool_response.grade }})"
+      title: "A compliance category dropped below 70 this measurement (grade {{ tool_response.data.grade }})"
       body: |
-        One or more categories in tool_response.categories crossed the 70 threshold downward since the last measurement. Identify which by comparing current scores to state.last_compliance.categories.
+        One or more categories in tool_response.data.categories crossed the 70 threshold downward since the last measurement. Identify which by comparing current scores to state.last_compliance.categories.
       cta: "This is a boundary crossing, not a steady-state weakness — it's the moment to intervene before compounding."
 
 # After every evaluation, replace the baseline in state with the current measurement.
@@ -77,9 +77,9 @@ post_evaluation:
   persist:
     last_compliance: |
       ({
-        grade: tool_response.grade,
-        score: tool_response.score,
-        categories: tool_response.categories,
-        summary: tool_response.summary,
+        grade: tool_response.data.grade,
+        score: tool_response.data.score,
+        categories: tool_response.data.categories,
+        summary: tool_response.data.summary,
         timestamp_iso: now_iso,
       })

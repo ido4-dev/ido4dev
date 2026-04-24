@@ -38,17 +38,17 @@ rules:
   # The violations[] list is authored by IntegrityValidator in @ido4/core
   # and is safe to pass through verbatim.
   - id: AT001_integrity_violation
-    when: "tool_response.integrity && tool_response.integrity.maintained === false"
+    when: "tool_response.data.integrity && tool_response.data.integrity.maintained === false"
     profiles: [hydro, scrum, shapeup]
     severity: warning
     emit:
-      title: "Assignment integrity violation: #{{ tool_response.issueNumber }} → {{{ tool_response.container }}}"
+      title: "Assignment integrity violation: #{{ tool_response.data.issueNumber }} → {{{ tool_response.data.container }}}"
       body: |
         The BRE flagged this assignment as breaking epic-container consistency.
         Violations:
-        {{#tool_response.integrity.violations}}
+        {{#tool_response.data.integrity.violations}}
         - {{{ . }}}
-        {{/tool_response.integrity.violations}}
+        {{/tool_response.data.integrity.violations}}
       cta: "Review the sibling tasks' containers before proceeding. This mistake tends to cascade — epic rollups get split and progress tracking becomes unreliable."
 
 # After every assignment, persist {issueNumber → container} into state.
@@ -59,6 +59,6 @@ rules:
 post_evaluation:
   persist:
     last_assignments: |
-      (typeof tool_input.issueNumber === 'number' && typeof tool_response.container === 'string')
-        ? { ...(state.last_assignments || {}), [tool_input.issueNumber]: tool_response.container }
+      (typeof tool_input.issueNumber === 'number' && typeof tool_response.data.container === 'string')
+        ? { ...(state.last_assignments || {}), [tool_input.issueNumber]: tool_response.data.container }
         : (state.last_assignments || {})

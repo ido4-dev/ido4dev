@@ -740,6 +740,68 @@ check('validateRuleFile accepts well-formed post_evaluation.persist', () => {
 });
 
 // ───────────────────────────────────────────────────────────────
+console.log('\n▸ unwrapMcpToolResponse — live MCP CallToolResult shape');
+
+check('unwraps {content: [{type:"text", text: <JSON string>}]} into the parsed object', () => {
+  const raw = {
+    content: [{ type: 'text', text: '{"success":true,"data":{"grade":"A","score":92}}' }],
+  };
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, { success: true, data: { grade: 'A', score: 92 } }, 'unwrapped');
+});
+
+check('unwraps a bare content array (Claude Code v2.1.119 actual shape)', () => {
+  const raw = [{ type: 'text', text: '{"success":true,"data":{"grade":"A","score":92}}' }];
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, { success: true, data: { grade: 'A', score: 92 } }, 'array-shape unwrapped');
+});
+
+check('passes through non-MCP shapes (already-parsed objects)', () => {
+  const raw = { success: true, data: { grade: 'B' } };
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, raw, 'pass-through for direct object');
+});
+
+check('passes through if content[0].type is not "text"', () => {
+  const raw = { content: [{ type: 'image', text: 'not parsed' }] };
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, raw, 'no unwrap when type !== text');
+});
+
+check('passes through if content array is empty', () => {
+  const raw = { content: [] };
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, raw, 'empty content passes through');
+});
+
+check('falls back to original on malformed JSON in text', () => {
+  const raw = { content: [{ type: 'text', text: '{not valid json' }] };
+  const out = runner.unwrapMcpToolResponse(raw);
+  assertEq(out, raw, 'malformed JSON returns original');
+});
+
+check('passes through null/undefined safely', () => {
+  assertEq(runner.unwrapMcpToolResponse(null), null, 'null passes through');
+  assertEq(runner.unwrapMcpToolResponse(undefined), undefined, 'undefined passes through');
+});
+
+check('evaluate() with MCP-shaped tool_response unwraps + rules see {success, data}', () => {
+  const file = rf([{
+    id: 'X', when: 'tool_response.data.canProceed === false',
+    emit: { title: 'fired' },
+  }]);
+  const event = {
+    hook_event_name: 'PostToolUse',
+    tool_input: { issueNumber: 1 },
+    tool_response: {
+      content: [{ type: 'text', text: '{"success":true,"data":{"canProceed":false}}' }],
+    },
+  };
+  const res = runner.evaluate({ ruleFile: file, event, profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
+  assertEq(res.findings.length, 1, 'rule fires after MCP unwrap');
+});
+
+// ───────────────────────────────────────────────────────────────
 console.log('\n▸ permission_decision — PreToolUse gate support');
 
 check('rule with permission_decision: ask surfaces in finding + formatHookResponse emits PreToolUse shape', () => {

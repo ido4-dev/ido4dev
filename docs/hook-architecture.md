@@ -157,7 +157,7 @@ post_evaluation:                    # Optional; see §post_evaluation below
 | Key | Source | Notes |
 |---|---|---|
 | `tool_input` | Event's `tool_input` | Raw client input to the tool (pre-Zod for MCP tools — unknown fields visible) |
-| `tool_response` | Event's `tool_response` | PostToolUse only; empty object on PreToolUse |
+| `tool_response` | Event's `tool_response`, **MCP-unwrapped** | PostToolUse only; empty object on PreToolUse. For MCP tools, the runner auto-unwraps the MCP `CallToolResult` shape (see "MCP tool_response unwrapping" below). |
 | `profile` | `.ido4/methodology-profile.json` | `hydro` / `scrum` / `shapeup` / null |
 | `profile_values` | Same file's `values` field | Profile-specific thresholds, limits, etc. |
 | `state` | `state.json` | Read at evaluation time; see §State layer |
@@ -171,6 +171,28 @@ post_evaluation:                    # Optional; see §post_evaluation below
 - Expression errors (undefined navigation, syntax errors, thrown exceptions) are caught and logged to stderr; the rule is skipped; evaluation continues for other rules.
 - `post_evaluation.persist` expressions preserve their raw return value (object/array/primitive); `undefined` is treated as no-op.
 - Expressions can use modern JS features: optional chaining, nullish coalescing, array methods, etc. The runtime is Node; no polyfills needed.
+
+### MCP `tool_response` unwrapping
+
+For MCP tool calls, Claude Code v2.1.119 passes `tool_response` as the MCP `CallToolResult.content` array directly:
+
+```js
+tool_response = [{ type: "text", text: "<JSON ENCODED RESPONSE>" }]
+```
+
+(Earlier MCP versions / docs suggested a wrapped form `{content: [...]}`; the runner handles both defensively.)
+
+The runner's `unwrapMcpToolResponse()` helper:
+1. Detects the array-or-`{content: [...]}` shape
+2. Extracts `content[0].text`
+3. JSON-parses it
+4. Substitutes the parsed result for `tool_response` in the rule context
+
+Net effect: rule expressions reference `tool_response.data.X` (the unwrapped engine response, e.g. `tool_response.data.canProceed`, `tool_response.data.grade`, `tool_response.data.integrity.maintained`). Non-MCP tool responses pass through unchanged — matters for synthetic test fixtures that supply already-parsed objects.
+
+**Why this matters:** without this unwrap, rule expressions that look like `tool_response.canProceed` would error on undefined property access — Phase 3 originally shipped rules with that path and they silently failed in production (caught by Stage 9 smoke test, fixed 2026-04-25; see `reports/phase3-mcp-tool-response-bug-2026-04-25.md`).
+
+**For test fixtures:** integration tests use the wrapped envelope `tool_response: { success: true, data: {...} }` directly — the runner's pass-through behavior on non-MCP shapes makes this work without test-side double-wrapping.
 
 ### Hit policies
 

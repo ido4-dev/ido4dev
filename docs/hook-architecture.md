@@ -286,9 +286,9 @@ post_evaluation:
   persist:
     last_compliance: |
       ({
-        grade: tool_response.grade,
-        score: tool_response.score,
-        categories: tool_response.categories,
+        grade: tool_response.data.grade,
+        score: tool_response.data.score,
+        categories: tool_response.data.categories,
         timestamp_iso: now_iso,
       })
 ```

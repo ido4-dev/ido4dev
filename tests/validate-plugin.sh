@@ -516,6 +516,46 @@ if [ -d hooks/rules ]; then
     done
     [ "$SCHEMA_BAD" = "0" ] && pass "every .rules.yaml parses + passes schema validation"
   fi
+
+  # Lint guardrail: PostToolUse rule files reading tool_response.<X> where <X>
+  # is anything other than `data.<...>` or `content...` indicate the author
+  # forgot the MCP unwrap layer. The runner unwraps `CallToolResult.content`
+  # into `{success, data: ...}` so production rules access tool_response.data.X
+  # for the engine response. Any tool_response.<other-field> in a PostToolUse
+  # rule is almost certainly an author mistake — silently broken in production.
+  # See docs/hook-architecture.md "MCP `tool_response` unwrapping".
+  if command -v python3 &>/dev/null; then
+    LINT_BAD=0
+    for RF in hooks/rules/*.rules.yaml; do
+      [ -f "$RF" ] || continue
+      VIOLATIONS=$(python3 -c "
+import re, sys
+content = open('$RF').read()
+# Skip PreToolUse files (they use tool_input which is unwrapped)
+event_match = re.search(r'^event:\s*(\S+)', content, re.MULTILINE)
+event = event_match.group(1) if event_match else 'PostToolUse'
+if event != 'PostToolUse':
+    sys.exit(0)
+# Match tool_response.<word> not followed by 'data.' or 'content'
+# (allow tool_response.data.X and tool_response.content[...] for raw MCP access)
+pattern = re.compile(r'tool_response\.(?!data\b|content\b)([a-zA-Z_][a-zA-Z0-9_]*)')
+violations = []
+for m in pattern.finditer(content):
+    field = m.group(1)
+    line_num = content[:m.start()].count('\n') + 1
+    violations.append(f'  line {line_num}: tool_response.{field}')
+if violations:
+    print('\n'.join(violations))
+    sys.exit(1)
+" 2>&1)
+      if [ -n "$VIOLATIONS" ]; then
+        fail "$RF — accesses tool_response.<field> without .data. (production rules need tool_response.data.<field> after MCP unwrap; see hook-architecture.md):"
+        echo "$VIOLATIONS" | head -10
+        LINT_BAD=$((LINT_BAD + 1))
+      fi
+    done
+    [ "$LINT_BAD" = "0" ] && pass "no PostToolUse rule file uses unwrapped tool_response.<field> path (MCP unwrap convention enforced)"
+  fi
 else
   fail "hooks/rules/ missing — Stage 3 should have created it"
 fi

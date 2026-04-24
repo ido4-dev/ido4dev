@@ -136,29 +136,29 @@ matcher: mcp__plugin_ido4dev_ido4__validate_transition
 hit_policy: collect
 rules:
   - id: VT001_blocked_by_bre
-    when: "tool_response.canProceed === false"
+    when: "tool_response.data.canProceed === false"
     profiles: [hydro, scrum, shapeup]
     severity: warning
     emit:
       title: "BRE blocked: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
       body: |
-        {{ tool_response.reason }}
+        {{{ tool_response.data.reason }}}
 
-        {{#tool_response.details}}
-        - [{{ severity }}] {{ stepName }}: {{ message }}
-        {{/tool_response.details}}
+        {{#tool_response.data.details}}
+        - [{{ severity }}] {{{ stepName }}}: {{{ message }}}
+        {{/tool_response.data.details}}
       cta: "Review suggestions[] or run /mcp__plugin_ido4dev_ido4__compliance for governance context."
 
   - id: VT002_passed_with_warnings
-    when: "tool_response.canProceed === true && tool_response.details.some(d => d.severity === 'warning')"
+    when: "tool_response.data.canProceed === true && tool_response.data.details.some(d => d.severity === 'warning')"
     profiles: [hydro, scrum, shapeup]
     severity: info
     emit:
       title: "Transition permitted with warnings: {{ tool_input.transition }} on #{{ tool_input.issueNumber }}"
-      body: "BRE approved with {{ tool_response.metadata.warnedSteps }} warning(s). Review details[] for specifics."
+      body: "BRE approved with {{ tool_response.data.metadata.warnedSteps }} warning(s). Review details[] for specifics."
 ```
 
-_Note: earlier drafts of this section included a `VT002_cascade_unblock` example referencing `tool_response.metadata.unblockedCount` — fields that don't exist on `ValidationResult`. The 2026-04-21 research pass corrected this (see §10). Cascade rules belong on matchers that actually produce cascade data (`complete_and_handoff` returns `newlyUnblocked[]`); see §5 Stage 4._
+_Note: earlier drafts of this section included a `VT002_cascade_unblock` example referencing `tool_response.metadata.unblockedCount` — fields that don't exist on `ValidationResult`. The 2026-04-21 research pass corrected this (see §10). Cascade rules belong on matchers that actually produce cascade data (`complete_and_handoff` returns `newlyUnblocked[]`); see §5 Stage 4. Subsequent (2026-04-25) research found a second shape issue: Claude Code passes MCP tool responses as the bare `CallToolResult.content` array, not the parsed engine output — the runner now unwraps that, and rules reference `tool_response.data.X` (the inner `{success, data: ...}` envelope). See `docs/hook-architecture.md` "MCP `tool_response` unwrapping" for mechanics._
 
 
 **Rationale:**
@@ -273,12 +273,12 @@ Phase 3 ships the escalation *slot*; Phase 4 (WS3) tunes which rules set it and 
 ```yaml
 rules:
   - id: CS001_grade_drop
-    when: "state.last_compliance && 'ABCDF'.indexOf(tool_response.grade) > 'ABCDF'.indexOf(state.last_compliance.grade)"
+    when: "state.last_compliance && 'ABCDF'.indexOf(tool_response.data.grade) > 'ABCDF'.indexOf(state.last_compliance.grade)"
     profiles: [hydro, scrum, shapeup]
     severity: warning
     escalate_to: project-manager   # <<<<< the slot
     emit:
-      title: "Compliance grade dropped: {{ state.last_compliance.grade }} → {{ tool_response.grade }}"
+      title: "Compliance grade dropped: {{ state.last_compliance.grade }} → {{{ tool_response.data.grade }}}"
 ```
 
 When the rule fires and has `escalate_to:`, the runner emits a strong governance-signal recommendation in the hook response:

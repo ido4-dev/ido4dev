@@ -269,31 +269,35 @@ check('unique: zero matches OK', () => {
 // ───────────────────────────────────────────────────────────────
 console.log('\n▸ Escalation wiring');
 
-check('escalate_to surfaces in result.escalate with default mode additionalContext', () => {
+check('escalate_to surfaces in result.escalate (advisory — no mode field)', () => {
   const file = rf([
     { id: 'A', when: 'true', emit: { title: 'A' }, escalate_to: 'project-manager' },
   ]);
   const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
   assertEq(res.escalate.length, 1, 'one escalation');
   assertEq(res.escalate[0].agent, 'project-manager', 'agent');
-  assertEq(res.escalate[0].mode, 'additionalContext', 'default mode');
+  assertTrue(res.escalate[0].rule_id === 'A', 'rule_id carried');
+  assertTrue(!('mode' in res.escalate[0]), 'no mode field — advisory-only per Stage 7');
 });
 
-check('escalate_mode: direct preserved through result', () => {
-  const file = rf([
-    { id: 'A', when: 'true', emit: { title: 'A' }, escalate_to: 'pm', escalate_mode: 'direct' },
-  ]);
-  const res = runner.evaluate({ ruleFile: file, event: ev({}, {}), profile: null, profileValues: {}, state: emptyState(), now: Date.now() });
-  assertEq(res.escalate[0].mode, 'direct', 'direct mode preserved');
+check('validateRuleFile rejects legacy escalate_mode field with a clear error', () => {
+  try {
+    runner.validateRuleFile({
+      rules: [{ id: 'A', when: 'true', escalate_to: 'pm', escalate_mode: 'direct' }],
+    }, 'mem');
+    throw new Error('should have thrown');
+  } catch (e) { assertTrue(/escalate_mode/.test(e.message), `error message mentions escalate_mode: ${e.message}`); }
 });
 
-check('formatHookResponse suggests /agents for additionalContext mode', () => {
+check('formatHookResponse emits strong governance-signal recommendation for escalate_to', () => {
   const result = {
     findings: [{ rule_id: 'A', severity: 'warning', title: 'T' }],
-    escalate: [{ rule_id: 'A', agent: 'project-manager', mode: 'additionalContext' }],
+    escalate: [{ rule_id: 'A', agent: 'project-manager' }],
   };
   const resp = runner.formatHookResponse(ev({}, {}), result);
-  assertTrue(resp.hookSpecificOutput.additionalContext.includes('/agents project-manager'), 'suggestion included');
+  assertTrue(resp.hookSpecificOutput.additionalContext.includes('/agents project-manager'), 'agent reference included');
+  assertTrue(resp.hookSpecificOutput.additionalContext.includes('Governance signal'), 'signal prefix included');
+  assertTrue(resp.hookSpecificOutput.additionalContext.includes('A'), 'rule_id surfaces');
 });
 
 check('formatHookResponse with no findings and no escalate returns empty object', () => {

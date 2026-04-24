@@ -12,9 +12,10 @@
 //   5. Apply the hit policy (first / collect / unique).
 //   6. Render `emit:` Mustache templates. Missing vars render as empty.
 //   7. Honor `debounce_seconds` using last_rule_fires in state.json.
-//   8. Record an `escalate_to:` suggestion when requested. Stage 2 only wires
-//      `additionalContext` mode; `direct` mode is surfaced structurally and
-//      gets consumed in Stage 7.
+//   8. Record an `escalate_to:` suggestion when requested. Escalation is
+//      advisory: a rule that sets `escalate_to: <agent-name>` produces a
+//      templated recommendation in the hook response; Claude (or the primary
+//      reasoner) decides whether to delegate. See phase-3-brief.md §4.4.
 //   9. Update state (last_rule_fires) atomically.
 //  10. Emit a Claude Code hook response (JSON on stdout).
 //
@@ -122,8 +123,12 @@ function validateRuleFile(doc, filePath) {
     if (r.debounce_seconds !== undefined && (typeof r.debounce_seconds !== 'number' || r.debounce_seconds < 0)) {
       throw new Error(`Rule file ${filePath}: rule ${r.id} "debounce_seconds" must be a non-negative number`);
     }
-    if (r.escalate_mode !== undefined && r.escalate_mode !== 'additionalContext' && r.escalate_mode !== 'direct') {
-      throw new Error(`Rule file ${filePath}: rule ${r.id} "escalate_mode" must be "additionalContext" or "direct"`);
+    if (r.escalate_mode !== undefined) {
+      // Stage 7 cleanup (2026-04-24): escalate_mode was a dead field — the
+      // runner silently dropped "direct"-mode findings because no runtime
+      // hook-to-agent delegation primitive exists in Claude Code. Rejecting
+      // the field explicitly catches any residual rule file that still sets it.
+      throw new Error(`Rule file ${filePath}: rule ${r.id} "escalate_mode" was removed in Phase 3 Stage 7 — escalation is advisory (additionalContext). Drop the field.`);
     }
     if (r.permission_decision !== undefined && !VALID_PERMISSION_DECISIONS.has(r.permission_decision)) {
       throw new Error(`Rule file ${filePath}: rule ${r.id} "permission_decision" must be one of ${[...VALID_PERMISSION_DECISIONS].join(', ')}`);
@@ -295,7 +300,6 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
       escalate.push({
         rule_id: rule.id,
         agent: rule.escalate_to,
-        mode: rule.escalate_mode || 'additionalContext',
       });
     }
 
@@ -343,11 +347,12 @@ function formatHookResponse(event, result, ruleFile) {
     return parts.join('\n\n');
   });
 
-  // Stage 2 only surfaces escalate_to via additionalContext suggestions. Direct
-  // mode ships its wiring in Stage 7.
+  // Escalation is advisory: rules with escalate_to surface a strong
+  // recommendation to delegate to the named agent. Opus-class reasoners
+  // reliably action these recommendations when surfaced in additionalContext.
+  // See phase-3-brief.md §4.4 for the rationale.
   const escalateBlocks = result.escalate
-    .filter((e) => e.mode !== 'direct')
-    .map((e) => `Suggested next action: invoke \`/agents ${e.agent}\` to review finding ${e.rule_id}.`);
+    .map((e) => `**Governance signal — recommend invoking \`/agents ${e.agent}\`** to review finding \`${e.rule_id}\` with full governance context.`);
 
   const additionalContext = [...blocks, ...escalateBlocks].filter(Boolean).join('\n\n---\n\n');
 

@@ -238,7 +238,9 @@ The state file and event log are not either/or — they're layered. `state.json`
 
 The full event log is architecturally correct but behaviorally over-engineered for Phase 3's rule set. Shipping rotation logic, schema versioning, and replay tooling for a use case no current rule needs is exactly the "adoption for adoption's sake" pattern this design is rejecting. When we need cross-session history, we add it — with working rules and concrete queries driving the design, not speculation about what rules might want.
 
-### 4.3 Hook taxonomy — which of Claude Code's 26 events Phase 3 uses
+### 4.3 Hook taxonomy — which Claude Code events Phase 3 uses
+
+_Correction 2026-04-22: an earlier draft claimed "26 hook events." Verification against the Claude Code hooks reference (2026-04-22) shows 13 documented events: `SessionStart`, `SessionEnd`, `Stop`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `PermissionDenied`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`. `PostCompact` is a closed feature request (anthropics/claude-code#32026), not an implemented hook. The row below for PostCompact is retained only as a record of the Stage 6 skip._
 
 | Event | Current state | Phase 3 action |
 |---|---|---|
@@ -251,7 +253,7 @@ The full event log is architecturally correct but behaviorally over-engineered f
 | **PostToolUse** on `assign_task_to_(wave\|sprint\|cycle)` | `"type": "prompt"` — violates §3.1 | **Rewrite.** Rule file `assign-task.rules.yaml`. Templated findings: integrity violation, forward dependency. No LLM. |
 | **PostToolUse** on `compute_compliance_score` | Not used | New. Rule file `compliance-score.rules.yaml`. Detect grade drop vs. last-seen-in-log; surface "Compliance dropped from B to C this session" with templated per-category breakdown. This is exactly where WS3's reactive PM-activation hook will hang. |
 | **UserPromptSubmit** | Not used | Not used in Phase 3. (Reserved for later consideration — could inject governance context before every prompt, but too aggressive to ship without user feedback.) |
-| **PostCompact** | Not used | New. Reseed PM context from `session-state.json` after context compaction, so the agent doesn't lose its governance situational awareness. Lightweight: one command hook that prints the state summary as additionalContext. |
+| **PostCompact** | — | **SKIPPED (2026-04-22).** Not implemented in current Claude Code. Memory-system auto-reload (CLAUDE.md + MEMORY.md re-injected post-compaction) addresses the underlying need; broader memory architecture tracked separately — see `architecture-evolution-plan.md §7.8`. |
 | **SubagentStart / SubagentStop** | Not used | Not used in Phase 3. Reserved for Phase 4 WS3 instrumentation (which subagents does the PM spawn, etc.). |
 | **TaskCreated / TaskCompleted** | Not used | Not used in Phase 3. Observability-only; no governance consequence. |
 | **Notification / PermissionRequest / PermissionDenied** | Not used | Not used in Phase 3. Not governance-relevant. |
@@ -260,49 +262,39 @@ The full event log is architecturally correct but behaviorally over-engineered f
 **Rationale for the taxonomy:**
 - Use every event that closes a §4.2 debt item or enables WS3; skip events that don't have clear governance value.
 - Don't invent uses for events to show breadth; silence is a feature.
-- `SessionEnd` + `PostCompact` + `SessionStart` together form the initiative-layer substrate WS3 needs. They're Phase 3 work because the infrastructure must exist before Phase 4 can consume it.
+- `SessionEnd` + `SessionStart` together form the initiative-layer substrate WS3 needs. They're Phase 3 work because the infrastructure must exist before Phase 4 can consume it. PostCompact was originally planned as a third substrate leg but was found to be unimplemented in current Claude Code; memory-system auto-reload covers the underlying need (§7.8 of the evolution plan).
 
-### 4.4 PM agent activation mechanism
+### 4.4 PM agent activation mechanism — advisory escalation
 
-Phase 3 ships the *slot* for PM activation from hooks; Phase 4 (WS3) fills it with the actual pattern-recognition logic.
+Phase 3 ships the escalation *slot*; Phase 4 (WS3) tunes which rules set it and adds the PM agent's hook-invocation awareness.
 
-**The slot:** any rule in any rule file can have an `escalate_to:` field:
+**The slot:** any rule can have an `escalate_to:` field naming an agent:
 
 ```yaml
 rules:
-  - id: CS001_grade_drop_to_D
-    when:
-      and:
-        - "==": [{ var: "tool_response.grade" }, "D"]
-        - "in":  [{ var: "tool_response.metadata.previous_grade" }, ["A", "B"]]
+  - id: CS001_grade_drop
+    when: "state.last_compliance && 'ABCDF'.indexOf(tool_response.grade) > 'ABCDF'.indexOf(state.last_compliance.grade)"
     profiles: [hydro, scrum, shapeup]
-    severity: error
-    emit:
-      title: "Compliance dropped sharply: previous {{ tool_response.metadata.previous_grade }} → current {{ tool_response.grade }}"
+    severity: warning
     escalate_to: project-manager   # <<<<< the slot
+    emit:
+      title: "Compliance grade dropped: {{ state.last_compliance.grade }} → {{ tool_response.grade }}"
 ```
 
-When the rule runner sees `escalate_to:`, it returns a hook response including:
+When the rule fires and has `escalate_to:`, the runner emits a strong governance-signal recommendation in the hook response:
 
 ```json
 {
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
-    "additionalContext": "<templated finding>\n\nRecommend: /agents project-manager"
+    "additionalContext": "<templated finding>\n\n---\n\n**Governance signal — recommend invoking `/agents project-manager`** to review finding `CS001_grade_drop` with full governance context."
   }
 }
 ```
 
-Or, if the rule has `escalate_mode: direct`, the runner invokes the agent directly via `"type": "agent"`:
+**Mechanism: advisory only.** The primary reasoner (Opus on the next turn) sees the recommendation and decides whether to delegate. This aligns with 2025–2026 SOTA for rule-engine → LLM escalation in governance contexts (see §10 status log, 2026-04-24 research pass): advisory is the consensus pattern; forced routing is reserved for hard-deny / non-discretionary-authority cases.
 
-```yaml
-    escalate_to: project-manager
-    escalate_mode: direct    # invoke via type:agent hook
-```
-
-In that case, Claude Code's `"type": "agent"` primitive takes over — multi-turn, with tool access — and the PM agent reasons on the signal without user intermediation.
-
-**Why both modes:** `additionalContext` is non-intrusive — the agent's next turn sees the signal and decides whether to delegate; cheap and reversible. `direct` is for signals where delay is itself a failure (e.g., a compliance cliff). Phase 3 wires both but uses only `additionalContext` by default; Phase 4 tunes which rules get `direct`.
+**Stage 7 correction (2026-04-24): `escalate_mode: direct` removed.** Earlier drafts of this section imagined a `direct` mode that would invoke `type: "agent"` hooks at runtime. Research found no such runtime primitive exists in Claude Code — `type: "agent"` hooks are experimental and purely declarative (fire unconditionally on their matcher; can't be runtime-triggered by a command hook). The `escalate_mode` field was never wired end-to-end (the runner silently dropped `direct`-mode findings); it has been removed from the rule schema. Rule files that still set `escalate_mode` fail validation with a clear error. If Phase 4 investigation concludes we need a forced-delegation primitive, the natural re-introduction point is a typed event envelope carrying context into a dedicated agent hook, NOT a runtime mode flag on advisory rules.
 
 ### 4.5 Profile-aware rule dispatch
 
@@ -451,22 +443,37 @@ Runner extension required: rules gain an optional `permission_decision` field; `
 
 *Goal of this stage:* user has deterministic gates on the three risky actions the substrate can catch today. Event-log-dependent gates (preceding-state patterns, re-attempt-after-failure patterns, task-graph queries) stay on the roadmap but don't block this stage.
 
-### Stage 6: PostCompact reseed hook
+### Stage 6: PostCompact reseed hook — SKIPPED (2026-04-22)
 
-- Add PostCompact command hook that reads `session-state.json` and emits a compact summary as `additionalContext` — methodology, active container, compliance grade, any unfinished governance items. Preserves PM situational awareness across context compactions.
-- Unit test the reseed summary generator (separate from rule-runner).
+**Not implemented.** Pre-implementation research (2026-04-22) found the PostCompact hook itself is not implemented in current Claude Code — the feature request (anthropics/claude-code#32026) was closed as a duplicate, and the current hooks reference lists 13 events, none of which is PostCompact. Building on a nonexistent primitive would be the Stage 3 mistake repeated at a larger scale.
 
-*Goal of this stage:* context compaction no longer erases governance state.
+Further findings that compounded the decision:
+1. **Claude Code's memory system already solves the underlying concern.** `CLAUDE.md` and the auto-memory `MEMORY.md` tree are automatically re-injected from disk after compaction. Governance state that needs to survive compaction can live there, not in `${CLAUDE_PLUGIN_DATA}/hooks/state.json`.
+2. **Auto-compaction is rare on Opus 4.7 with 1M context.** Default compaction threshold is ~150K tokens; typical long sessions don't hit it. The infrastructure cost of a compaction-specific hook wouldn't be justified even if the hook existed.
+3. **Nothing downstream depends on Stage 6.** Stages 7–9 work regardless.
 
-### Stage 7: PM agent escalation slot
+The underlying concern — "how does ido4 deliberately participate in Claude Code's memory architecture across sessions, compaction events, and sub-agent contexts" — is genuinely larger than Phase 3 hooks and properly belongs to a cross-cutting investigation tracked at `architecture-evolution-plan.md §7.8` and kicked off via `~/dev-projects/ido4-suite/briefs/memory-architecture-investigation.md`. If that investigation produces a concrete design, it lands as a separate initiative across the ecosystem (not a Phase 3 patch).
 
-- Extend rule-runner to recognize `escalate_to:` and `escalate_mode:` fields.
-- Default mode (`additionalContext`) injects a "recommend: /agents project-manager" suggestion when a rule with `escalate_to:` fires.
-- Direct mode (`escalate_mode: direct`) wraps the finding as a `"type": "agent"` hook invocation.
-- No rules use `direct` mode yet in Phase 3 — Phase 4 tunes per rule. This stage just wires the slot.
-- Verify in a live session: trigger a grade-drop rule with `escalate_to: project-manager`, observe the suggestion lands in the next-turn context.
+*Goal of this stage:* **removed.** The problem is tracked; the mechanism the brief hypothesized does not exist.
 
-*Goal of this stage:* WS3 has its activation slot ready. Phase 4 can start writing PM-activation rules without any hook-layer code changes.
+### Stage 7: PM agent escalation slot — cleanup + advisory wording
+
+Pre-implementation research (2026-04-24, three parallel streams — Claude Code hook mechanics, internal state, SOTA patterns) established three load-bearing findings:
+
+1. **`type: "agent"` hooks are purely declarative** — they fire unconditionally on their matcher; there is no runtime mechanism for a command hook (our rule-runner) to trigger an agent hook. The brief's §4.4 `escalate_mode: direct` mechanism was unimplementable as specified.
+2. **The slot was already structurally wired in Stage 2** — `escalate_to:` + `escalate_mode:` schema validation, `result.escalate[]` shape, `formatHookResponse` emission. But `escalate_mode: direct` findings were silently filtered out — dead code.
+3. **SOTA for governance escalation converges on advisory, not forced.** LangGraph / CrewAI / Semantic Kernel / OpenAI Agents SDK / Azure patterns all converge on "deterministic detection + structured advisory escalation; primary reasoner routes." Opus 4.7 is tuned for literal instruction-following — strong recommendations are reliably actioned without coercion.
+
+Stage 7 work is therefore cleanup + wording, not new wiring:
+
+- Remove the `escalate_mode` field from the rule schema. The runner now rejects any residual rule file that sets it, with a clear error pointing at this stage.
+- Strengthen the advisory wording in the hook response: findings with `escalate_to` now emit `**Governance signal — recommend invoking \`/agents <name>\`** to review finding ...` — strong, specific, actionable, consistent with Opus 4.7's response patterns.
+- Remove `mode` from `result.escalate[]` entries (single field: `{rule_id, agent}`).
+- Update unit tests that referenced the removed field.
+
+- Verify in a live session (deferred to user, Stage 9 smoke test): trigger CS001 with a grade drop, observe the governance-signal recommendation lands in next-turn context.
+
+*Goal of this stage:* the escalation slot is honest — shipped what's buildable today (advisory), removed what wasn't (forced delegation via non-existent runtime primitive). Phase 4 investigates whether a forced-delegation primitive is ever needed; the natural re-introduction point (if needed) is a typed event envelope into a dedicated agent hook, not a mode flag.
 
 ### Stage 8: Documentation + validate-plugin coverage
 
@@ -487,10 +494,10 @@ Focused smoke test modeled on Phase 2's — not a full E2E, targets only new cod
 
 1. Confirm SessionStart hardening: kill MCP server install, verify graceful degradation message.
 2. Trigger `validate_transition` with a known-blocking state; verify templated finding appears without LLM interpretation latency.
-3. Trigger `compute_compliance_score` with a grade-drop fixture; verify `escalate_to: project-manager` suggestion appears.
+3. Trigger `compute_compliance_score` with a grade-drop fixture; verify CS001 fires and the `**Governance signal — recommend invoking /agents project-manager**` recommendation lands in next-turn context (the advisory escalation path — forced delegation was removed in Stage 7).
 4. Trigger a PreToolUse gate; verify confirmation UI.
 5. Run a turn, SessionEnd, restart, verify SessionStart reads `session-state.json` and emits resume banner.
-6. Run context compaction; verify PostCompact reseed.
+6. ~~Run context compaction; verify PostCompact reseed.~~ **Skipped** — PostCompact hook not implemented in current Claude Code; Stage 6 was cut (see §5 Stage 6).
 
 Produces `reports/e2e-005-phase-3-smoke.md`.
 
@@ -542,9 +549,9 @@ Each will get resolved in its natural stage with a short status-log entry.
 - [ ] `hooks/hooks.json` contains no `"type": "prompt"` entries
 - [ ] SessionStart has graceful degradation (verified live)
 - [ ] SessionEnd persists `state.json`; SessionStart reads it on resume
-- [ ] PostCompact reseeds PM context from `state.json`
+- [x] ~~PostCompact reseeds PM context from `state.json`~~ — **skipped**; hook not implemented in current Claude Code, memory auto-reload covers the need, broader investigation tracked at `architecture-evolution-plan.md §7.8`
 - [ ] PreToolUse gates risky transitions with `permissionDecision: "ask"`
-- [ ] `escalate_to:` + `escalate_mode:` fields work; default `additionalContext` mode verified live
+- [ ] `escalate_to:` field works; advisory wording verified live (Stage 7 — `escalate_mode` field removed as dead code; see §5 Stage 7)
 - [ ] `validate-plugin.sh` has new sections for rule-runner, rule-file schema, no-prompt check, state-file schema
 - [ ] `CLAUDE.md` §Hook Architecture section exists, pointing at the suite strategy doc
 - [ ] `docs/hook-architecture.md` exists as ido4dev-specific canonical reference (suite-level strategy lives in `ido4-suite/docs/hook-and-rule-strategy.md`)
@@ -566,6 +573,9 @@ Each will get resolved in its natural stage with a short status-log entry.
 | 2026-04-21 | **Institutional-memory reframing before Stage 4 implementation.** User pushback on whether the Stage 4 design was at the right altitude produced a reframing that earned a new design principle in `architecture-evolution-plan.md §3.9` — hooks/rules/state as the operating substrate for hybrid human+AI engineering at scale, not UX polish. The test for whether a rule earns its slot shifted from "improves UX?" to "operationalizes institutional memory?" Re-audit cut 2 of 7 originally-sketched Stage 4 rules (CS003 recommendations-present, CH003 no-next-task) as noise, rescued CH002 (strong-next-task) as memory-surfacing (the scoreBreakdown IS reasoning the agent/human needs), and reshaped VT001+CS001 bodies to surface reasoning over mere facts. |
 | 2026-04-21 | **Stage 4 shipped (commit `68f0f6a`).** 5 rules distributed to the matchers that produce their signals: **compliance-score.rules.yaml** (CS001 grade-drop with `escalate_to: project-manager`; CS002 category-threshold-crossed — both stateful via `state.last_compliance` baseline). **complete-and-handoff.rules.yaml** (CH001 cascade unblock; CH002 strong-next-task with scoreBreakdown reasoning). **assign-task.rules.yaml** (AT001 integrity violation; first use of regex matcher for the wave/sprint/cycle tool family). Runner extensions: `post_evaluation.persist` (top-of-file block, JS-expr values, overwrite semantics — the substrate stateful rules need to advance their baselines across calls), `now_iso`/`now_ms` context helpers, `evalExpr` exported. Sibling fix: all prose Mustache fields across rule files now triple-brace to render raw (default double-brace HTML-escapes quotes/ampersands into noise); a regression-guard unit test catches silent reverts. 69 unit + 48 integration tests passing. 105 passed / 0 failed in validate-plugin. §3.1 violation closed across all Phase 3-scoped matchers. Stages 5–9 remain. |
 | 2026-04-21 | **Stage 5 research correction.** Pre-implementation investigation across three parallel streams surfaced that the brief's Stage 5 scope assumed infrastructure that doesn't exist: "preceding review," "recent dry-run," and "same-epic-different-container" all require cross-turn event history. Phase 3 deliberately shipped the simple `state.json` layer, not the event log (strategy §4.6 over §4.7; YAGNI until a rule requires it). Stage 5 scope corrected to Option B — lean gates using only `tool_input` + `state.json`. Three gates earn their slot under the institutional-memory lens: **G1** universal `skipValidation=true` gate (the BRE-bypass flag is unaudited today; deterministic from tool_input); **G3** `approve_task` when `state.last_compliance.grade` is D or F (governance-memory-imposed); **G5** re-assignment gate (state.last_assignments baseline added in Stage 4's rule file). Event-log promotion tracked in `architecture-evolution-plan.md §7.7` as a standing open decision with concrete pending triggers documented. Research also produced two factual findings load-bearing for implementation: all transition tools are dynamically generated from `profile.transitions` (regex matcher `refine_task|ready_task|start_task|review_task|approve_task|complete_task|block_task|unblock_task|return_task`), and `skipValidation` is binary (bypasses entire BRE, not per-step). Brief §5 Stage 5 rewritten. |
+| 2026-04-21 | **Stage 5 shipped (commit `62d06fa`, ido4dev) + suite doc update (commit `cad3358`, ido4-suite).** 3 gates, rule-runner extended with `permission_decision` + `event:` declaration + PreToolUse response shape, `state.js` coerce fixed to preserve unknown top-level fields (production bug surfaced during end-to-end CLI testing — was silently erasing `post_evaluation.persist`-written fields across sessions). 80 unit + 70 integration tests. `validate-plugin.sh` 108/0/1. |
+| 2026-04-22 | **Stage 6 research correction — SKIPPED.** Pre-implementation research found: (a) PostCompact hook is not implemented in current Claude Code (feature request anthropics/claude-code#32026 closed as duplicate; current hooks reference lists 13 events, none are PostCompact); (b) Claude Code's memory system (`CLAUDE.md` + `~/.claude/projects/<proj>/memory/MEMORY.md` tree) re-injects from disk automatically after compaction, covering the underlying "governance state erased at compaction" concern for any state that lives in memory files; (c) auto-compaction is rare on Opus 4.7 with 1M context (default threshold ~150K tokens, typical long sessions don't hit it). The brief's Stage 6 (PostCompact reseed) was building on a non-existent primitive to solve a rarely-triggered problem that Claude Code already handles natively for memory-file-resident state. Stage 6 removed from §5 and the §9 end-of-phase checklist; skipped stage does not block Stages 7–9. **Larger consequence:** the broader question "should ido4 deliberately participate in Claude Code's memory architecture" is genuinely cross-cutting (affects Phase 4 PM agent substrate, potentially ido4specs/ido4shape reasoning) and properly belongs to a dedicated investigation tracked at `architecture-evolution-plan.md §7.8`; kickoff brief written at `~/dev-projects/ido4-suite/briefs/memory-architecture-investigation.md` for a future session. Implementation of any resulting design is a separate initiative outside Phase 3. |
+| 2026-04-24 | **Stage 7 research correction + cleanup.** Three parallel research streams (Claude Code hook mechanics + internal state + SOTA for rule→LLM escalation) converged on: the brief's `escalate_mode: direct` mechanism is not buildable — no runtime hook-to-agent delegation primitive exists in Claude Code; `type: "agent"` hooks are purely declarative + experimental with no adopters; SOTA for governance escalation (LangGraph, CrewAI, Semantic Kernel, OpenAI Agents SDK, Azure patterns, MI9 governance paper) converges on advisory-with-teeth, not forced routing — Opus 4.7 is tuned for literal instruction-following and reliably actions strong recommendations. Internal state audit confirmed the `escalate_mode` field has been dead code since Stage 2 (runner silently dropped `direct`-mode findings). Stage 7 executed as cleanup: `escalate_mode` field removed from the rule schema (runner rejects any rule that still sets it with a clear error pointing to this entry); `mode` field dropped from `result.escalate[]`; recommendation wording strengthened to `**Governance signal — recommend invoking \`/agents <name>\`**` per SOTA advisory pattern; `result.escalate[]` entries now `{rule_id, agent}`. 80 unit + 70 integration tests passing after updates. §4.4 rewritten; §5 Stage 7 rewritten; §9 checkbox updated; §5 Stage 6 cross-reference added to §9 smoke-test step 6. No rule files changed — CS001 grade-drop already used default advisory mode. Four consecutive stages now have had research-first pre-implementation corrections (Stages 3, 5, 6, 7); the pattern holds — Phase 3's original brief was optimistic about Claude Code primitives, and the research-first discipline has caught every case. |
 
 ---
 

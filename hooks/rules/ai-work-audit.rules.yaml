@@ -1,0 +1,150 @@
+# Rules for PostToolUse on the transition tool family — AI work-product audit.
+#
+# Phase 4 Stage 2. Rides on Phase 3's substrate (rule-runner, state.json,
+# advisory escalation, MCP-unwrap). No new architectural primitives.
+#
+# Matcher covers all transition action names across all three methodologies:
+#   refine, ready, start, review, approve, complete, block, unblock, return  (Hydro common)
+#   plan                                                                      (Scrum-specific)
+#   shape, bet, ship, kill                                                    (Shape Up-specific)
+# This is a superset of Phase 3's pre-transition matcher (which uses only
+# the Hydro/Scrum-common subset). The expansion is needed for AW002/AW005 to
+# catch bypass + suitability violations on Shape Up's methodology-specific
+# transitions (shape, bet, ship, kill).
+#
+# Signals used (verified against ~/dev-projects/ido4/packages/core/src):
+#   - tool_input.skipValidation: boolean (Phase 3 G1 also reads this)
+#   - tool_response.data.{issueNumber, fromStatus, toStatus}
+#   - tool_response.auditEntry.{actor: {type, id}, transition}  ← actor.type
+#     IS reachable post-MCP-unwrap; the engine sets it on every transition
+#   - tool_response.validationResult.details[]  with stepName +severity
+#
+# Three rules ship in this file. AW004 (cross-task coherence) is NOT in this
+# file — it requires multi-event session aggregation that doesn't fit
+# per-event rule semantics; it lives in the PM agent's reasoning per the
+# Audit Methodology section of agents/project-manager/AGENT.md.
+#
+# Thesis framing (§3.9): the institutional-memory test for each rule —
+# "does this surface something the user/agent doesn't otherwise have in
+# context?" AW001 surfaces AI closures the user might not be tracking.
+# AW002 surfaces BRE bypass that's otherwise unaudited (the bypass flag
+# itself doesn't generate an audit signal at the engine layer beyond a
+# binary skipped/not-skipped marker). AW005 surfaces AI-attempted-on-
+# human-only transitions, which the BRE blocks but doesn't otherwise
+# escalate as a pattern signal.
+
+version: 1
+event: PostToolUse
+matcher: "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return|shape|bet|ship|kill|plan)_task$"
+hit_policy: collect
+
+rules:
+  # AW001 — AI closure detected: agent should verify PR + review state.
+  #
+  # Combines the brief's draft AW001 (ghost_closure) and AW003 (rubber_stamp)
+  # into one trigger rule. They fire on identical conditions (AI actor +
+  # transition reached a terminal state); separating them produces two
+  # advisory escalations on every AI close, which is noise. The agent on
+  # receipt computes both Tier A metrics (closure-with-PR rate, closure-with-
+  # review rate) and persists findings under whichever category trips its
+  # threshold (or persists nothing if the session-level rates are healthy).
+  #
+  # PR linkage and review state are NOT in transition tool responses (verified
+  # against task-service.ts:271-282) — only the engine-side audit envelope
+  # carries actor identity. This rule cannot deterministically check PR/review
+  # state; it can only deterministically detect the AI-closure event.
+  #
+  # Terminal-state check uses a regex against the methodology's terminal
+  # states across all three profiles: DONE (Hydro/Scrum), SHIPPED + KILLED
+  # (Shape Up). Case-insensitive — engine emits state names in uppercase.
+  - id: AW001_ai_closure_audit_needed
+    profiles: [hydro, scrum, shapeup]
+    when: |
+      tool_response.auditEntry &&
+      tool_response.auditEntry.actor &&
+      tool_response.auditEntry.actor.type === 'ai-agent' &&
+      tool_response.data &&
+      typeof tool_response.data.toStatus === 'string' &&
+      /^(done|shipped|killed)$/i.test(tool_response.data.toStatus)
+    severity: warning
+    escalate_to: project-manager
+    emit:
+      title: "AI closure on #{{ tool_response.data.issueNumber }} — verify PR + review state"
+      body: |
+        AI agent {{{ tool_response.auditEntry.actor.id }}} drove #{{ tool_response.data.issueNumber }} from {{ tool_response.data.fromStatus }} to {{{ tool_response.data.toStatus }}} via the {{{ tool_response.auditEntry.transition }}} transition.
+
+        AI-driven closures need post-hoc verification — PR linkage and review state are not in the transition tool response, so this rule fires the trigger; you (the PM agent) do the check:
+
+        - `find_task_pr({issueNumber: {{ tool_response.data.issueNumber }}})` — does a PR exist? A closure without a PR is a `ghost_closure` candidate.
+        - `get_pr_reviews(...)` if the PR exists — is there at least one approving review? A closure without an approving review is a `rubber_stamp` candidate.
+
+        Persist a finding to `state.json open_findings[]` only if the session's running rates cross threshold (closure-with-PR < 90% → ghost_closure; closure-with-review < 80% → rubber_stamp). A single uncommonly-fast close isn't yet a pattern; restraint is a feature.
+
+  # AW002 — AI agent bypassed the BRE via skipValidation.
+  #
+  # Fully deterministic. Both signals live in rule context: `skipValidation`
+  # in tool_input (Phase 3 G1 also uses this signal) and actor.type in
+  # tool_response.auditEntry. Fires when an AI actor invokes any transition
+  # tool with skipValidation=true. The PreToolUse G1 gate catches all
+  # bypasses (human + AI) before they execute; AW002 is the post-execution
+  # audit that specifically tracks AI-actor bypass patterns for finding
+  # persistence by category.
+  #
+  # Severity is error (not warning) because skipValidation by an AI actor
+  # is the strongest pattern under §3.9 — institutional memory blocked at
+  # the actor level: the system remembers which actors habitually opt out.
+  - id: AW002_ai_bre_bypass
+    profiles: [hydro, scrum, shapeup]
+    when: |
+      tool_input.skipValidation === true &&
+      tool_response.auditEntry &&
+      tool_response.auditEntry.actor &&
+      tool_response.auditEntry.actor.type === 'ai-agent'
+    severity: error
+    escalate_to: project-manager
+    emit:
+      title: "AI agent bypassed BRE on #{{ tool_response.data.issueNumber }} via skipValidation"
+      body: |
+        AI agent {{{ tool_response.auditEntry.actor.id }}} invoked the {{{ tool_response.auditEntry.transition }}} transition on #{{ tool_response.data.issueNumber }} with `skipValidation: true`.
+
+        skipValidation bypasses the entire BRE pipeline — no state gates, dependency checks, epic integrity, or quality gates ran. There is no per-step audit differentiation between bypass-on-purpose and bypass-by-mistake.
+
+        Persist a `bypass_pattern` finding to `state.json open_findings[]` if this is the 3rd+ bypass by this actor in the current session. Use deterministic id composition: `audit:bypass_pattern:{{{ tool_response.auditEntry.actor.id }}}:<scope>` so repeats update rather than duplicate.
+
+  # AW005 — AI agent attempted a transition the BRE blocked on AI suitability.
+  #
+  # Fully deterministic. Fires when validationResult.details[] contains an
+  # AISuitabilityValidation step with severity:'error' AND the actor was an
+  # AI agent. This catches:
+  #   - AI attempting work on a task with aiSuitability='human-only'
+  #   - aiSuitability retroactively edited to 'human-only' AFTER the AI
+  #     started work (suitability_drift pattern)
+  #
+  # The BRE block is correct behavior — what's worth surfacing is the
+  # pattern of AI agents reaching this point. A single occurrence is
+  # informational; repeats by the same actor or task suggest structural
+  # mis-classification of work.
+  - id: AW005_ai_suitability_violation
+    profiles: [hydro, scrum, shapeup]
+    when: |
+      tool_response.auditEntry &&
+      tool_response.auditEntry.actor &&
+      tool_response.auditEntry.actor.type === 'ai-agent' &&
+      tool_response.validationResult &&
+      Array.isArray(tool_response.validationResult.details) &&
+      tool_response.validationResult.details.some(function(d) {
+        return d && d.stepName === 'AISuitabilityValidation' && d.severity === 'error';
+      })
+    severity: error
+    escalate_to: project-manager
+    emit:
+      title: "AI agent attempted work on a non-AI-suitable task — #{{ tool_response.data.issueNumber }}"
+      body: |
+        AI agent {{{ tool_response.auditEntry.actor.id }}} attempted the {{{ tool_response.auditEntry.transition }}} transition on #{{ tool_response.data.issueNumber }}, and the BRE blocked it via `AISuitabilityValidation`.
+
+        The block itself is correct — the BRE's job. What's worth surfacing is that an AI actor reached this point. Two possibilities to investigate:
+
+        - The task's `aiSuitability` was retroactively edited to `'human-only'` after AI work started (suitability_drift)
+        - The AI actor is operating outside its designated scope on this task
+
+        Investigate via `query_audit_trail` scoped to this issue + this actor to determine which. Persist a `suitability_drift` finding if the audit trail shows a prior state-change by the same actor on the same task.

@@ -96,6 +96,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return|shape|bet|ship|kill|plan)_task$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 && node \"${CLAUDE_PLUGIN_ROOT}/hooks/lib/rule-runner.js\" --rules \"${CLAUDE_PLUGIN_ROOT}/hooks/rules/ai-work-audit.rules.yaml\" || true",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

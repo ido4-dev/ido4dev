@@ -188,11 +188,24 @@ The runner's `unwrapMcpToolResponse()` helper:
 3. JSON-parses it
 4. Substitutes the parsed result for `tool_response` in the rule context
 
-Net effect: rule expressions reference `tool_response.data.X` (the unwrapped engine response, e.g. `tool_response.data.canProceed`, `tool_response.data.grade`, `tool_response.data.integrity.maintained`). Non-MCP tool responses pass through unchanged — matters for synthetic test fixtures that supply already-parsed objects.
+Net effect: rule expressions reference fields on the engine's `ToolResponse` envelope (`~/dev-projects/ido4/packages/core/src/domains/tasks/task-service.ts:271-282`). The envelope's top-level fields:
+
+- `tool_response.success` — boolean; whether the engine action succeeded
+- `tool_response.data` — the action-specific payload (e.g., `tool_response.data.canProceed` for validate_transition; `tool_response.data.issueNumber/fromStatus/toStatus` for executeTransition)
+- `tool_response.suggestions` — engine-generated suggestions array
+- `tool_response.warnings` — engine-generated warnings array
+- `tool_response.validationResult` — present on transition tools; carries `canProceed`, `details[]`, `metadata`
+- `tool_response.auditEntry` — present on transition tools; carries `actor: {type, id}`, `transition` — load-bearing for Phase 4 AI-work-product audit rules
+
+Note: `validate_transition` (the dry-run validator) returns the simpler `{success, data: ValidationResult}` shape — no auditEntry or sibling validationResult since the action wasn't executed. Real transition tools (`complete_task`, `approve_task`, `start_task`, `ship_task`, etc.) return the full envelope above.
+
+Non-MCP tool responses pass through unchanged — matters for synthetic test fixtures that supply already-parsed objects.
 
 **Why this matters:** without this unwrap, rule expressions that look like `tool_response.canProceed` would error on undefined property access — Phase 3 originally shipped rules with that path and they silently failed in production (caught by Stage 9 smoke test, fixed 2026-04-25; see `reports/phase3-mcp-tool-response-bug-2026-04-25.md`).
 
-**For test fixtures:** integration tests use the wrapped envelope `tool_response: { success: true, data: {...} }` directly — the runner's pass-through behavior on non-MCP shapes makes this work without test-side double-wrapping.
+**For test fixtures:** integration tests use the engine's envelope shape directly — for validate_transition: `{ success: true, data: ValidationResult }`; for transition tools: `{ success, data: {...}, suggestions, warnings, validationResult, auditEntry }`. The runner's pass-through behavior on non-MCP shapes makes this work without test-side double-wrapping. See `hooks/rules/ai-work-audit.test.yaml` for executeTransition envelope examples and `validate-transition.test.yaml` for the simpler shape.
+
+**Lint guardrail (`tests/validate-plugin.sh`):** PostToolUse rule files are scanned for `tool_response.<X>` access where `<X>` is outside the engine's documented envelope. Allowed: `data`, `suggestions`, `warnings`, `validationResult`, `auditEntry`, `success`, `content` (raw MCP). Anything else is almost certainly a typo or unwrap mistake — fails the build. Phase 3 originally allowed only `data`/`content`; Phase 4 Stage 2 expanded the allowlist to match the full envelope.
 
 ### Hit policies
 

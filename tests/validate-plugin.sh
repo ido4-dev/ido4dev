@@ -518,11 +518,16 @@ if [ -d hooks/rules ]; then
   fi
 
   # Lint guardrail: PostToolUse rule files reading tool_response.<X> where <X>
-  # is anything other than `data.<...>` or `content...` indicate the author
-  # forgot the MCP unwrap layer. The runner unwraps `CallToolResult.content`
-  # into `{success, data: ...}` so production rules access tool_response.data.X
-  # for the engine response. Any tool_response.<other-field> in a PostToolUse
-  # rule is almost certainly an author mistake — silently broken in production.
+  # is anything other than a known top-level field of the engine's ToolResponse
+  # envelope indicate the author forgot the MCP unwrap layer or typoed a field.
+  # The runner unwraps `CallToolResult.content[].text` into the engine's
+  # ToolResponse object whose top-level fields are documented at
+  # `~/dev-projects/ido4/packages/core/src/domains/tasks/task-service.ts:271-282`:
+  #   { success, data, suggestions, warnings, validationResult, auditEntry }
+  # Any access to `tool_response.<other-field>` in a PostToolUse rule is almost
+  # certainly an author mistake — silently broken in production. Phase 4 Stage 2
+  # added auditEntry + validationResult to the allowlist; Phase 3 originally
+  # codified only `data.X` because no Phase 3 rule accessed siblings.
   # See docs/hook-architecture.md "MCP `tool_response` unwrapping".
   if command -v python3 &>/dev/null; then
     LINT_BAD=0
@@ -536,9 +541,10 @@ event_match = re.search(r'^event:\s*(\S+)', content, re.MULTILINE)
 event = event_match.group(1) if event_match else 'PostToolUse'
 if event != 'PostToolUse':
     sys.exit(0)
-# Match tool_response.<word> not followed by 'data.' or 'content'
-# (allow tool_response.data.X and tool_response.content[...] for raw MCP access)
-pattern = re.compile(r'tool_response\.(?!data\b|content\b)([a-zA-Z_][a-zA-Z0-9_]*)')
+# Allowlist: known top-level fields of the engine's ToolResponse envelope
+# (data, suggestions, warnings, validationResult, auditEntry, success) +
+# raw MCP access (content). Anything else is a typo or unwrap mistake.
+pattern = re.compile(r'tool_response\.(?!data\b|content\b|success\b|suggestions\b|warnings\b|validationResult\b|auditEntry\b)([a-zA-Z_][a-zA-Z0-9_]*)')
 violations = []
 for m in pattern.finditer(content):
     field = m.group(1)
@@ -549,12 +555,12 @@ if violations:
     sys.exit(1)
 " 2>&1)
       if [ -n "$VIOLATIONS" ]; then
-        fail "$RF — accesses tool_response.<field> without .data. (production rules need tool_response.data.<field> after MCP unwrap; see hook-architecture.md):"
+        fail "$RF — accesses tool_response.<field> not in the engine's ToolResponse envelope (allowed: data, suggestions, warnings, validationResult, auditEntry, success, content; see hook-architecture.md):"
         echo "$VIOLATIONS" | head -10
         LINT_BAD=$((LINT_BAD + 1))
       fi
     done
-    [ "$LINT_BAD" = "0" ] && pass "no PostToolUse rule file uses unwrapped tool_response.<field> path (MCP unwrap convention enforced)"
+    [ "$LINT_BAD" = "0" ] && pass "no PostToolUse rule file uses unknown tool_response.<field> (engine ToolResponse envelope convention enforced)"
   fi
 else
   fail "hooks/rules/ missing — Stage 3 should have created it"

@@ -1,0 +1,426 @@
+# Test fixtures for ai-work-audit.rules.yaml.
+#
+# Coverage:
+#   - AW001: AI closure across the three methodologies' terminal states
+#     (Hydro DONE, Scrum DONE, Shape Up SHIPPED + KILLED) + negatives (human
+#     actor, AI on non-closing transition)
+#   - AW002: AI bypass on various transitions + negatives (human bypass,
+#     AI without skipValidation)
+#   - AW005: AI suitability violation + negatives (AI on AI-suitable task,
+#     human on human-only task)
+
+rule_file: ai-work-audit.rules.yaml
+cases:
+
+# ── AW001: AI closure detection ────────────────────────────────────
+
+- name: 'hydro: AI completes task to DONE fires AW001'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__complete_task
+    tool_input:
+      issueNumber: 42
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: IN_REVIEW
+        toStatus: DONE
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: complete
+  expect:
+    fired: [AW001_ai_closure_audit_needed]
+    severity: warning
+    title_contains: '#42'
+    body_contains: 'find_task_pr'
+
+- name: 'scrum: AI approves task to DONE fires AW001'
+  profile: scrum
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__approve_task
+    tool_input:
+      issueNumber: 101
+    tool_response:
+      success: true
+      data:
+        issueNumber: 101
+        fromStatus: IN_REVIEW
+        toStatus: DONE
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-bar
+        transition: approve
+  expect:
+    fired: [AW001_ai_closure_audit_needed]
+    title_contains: '#101'
+    body_contains: 'agent-bar'
+
+- name: 'shapeup: AI ships scope to SHIPPED fires AW001'
+  profile: shapeup
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__ship_task
+    tool_input:
+      issueNumber: 7
+    tool_response:
+      success: true
+      data:
+        issueNumber: 7
+        fromStatus: QA
+        toStatus: SHIPPED
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-baz
+        transition: ship
+  expect:
+    fired: [AW001_ai_closure_audit_needed]
+    title_contains: '#7'
+    body_contains: 'rubber_stamp'
+
+- name: 'shapeup: AI kills scope to KILLED fires AW001 (alternate terminal)'
+  profile: shapeup
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__kill_task
+    tool_input:
+      issueNumber: 8
+    tool_response:
+      success: true
+      data:
+        issueNumber: 8
+        fromStatus: BUILDING
+        toStatus: KILLED
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-baz
+        transition: kill
+  expect:
+    fired: [AW001_ai_closure_audit_needed]
+    title_contains: '#8'
+
+- name: 'human actor closure does NOT fire AW001'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__complete_task
+    tool_input:
+      issueNumber: 50
+    tool_response:
+      success: true
+      data:
+        issueNumber: 50
+        fromStatus: IN_REVIEW
+        toStatus: DONE
+      auditEntry:
+        actor:
+          type: human
+          id: bogdan
+        transition: complete
+  expect:
+    fired: []
+
+- name: 'AI on non-closing transition does NOT fire AW001'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: []
+
+# ── AW002: AI BRE bypass ────────────────────────────────────────────
+
+- name: 'hydro: AI bypasses BRE on start_task fires AW002'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+      skipValidation: true
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: [AW002_ai_bre_bypass]
+    severity: error
+    title_contains: 'skipValidation'
+    body_contains: 'BRE pipeline'
+
+- name: 'scrum: AI bypasses BRE on approve_task fires AW002'
+  profile: scrum
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__approve_task
+    tool_input:
+      issueNumber: 200
+      skipValidation: true
+    tool_response:
+      success: true
+      data:
+        issueNumber: 200
+        fromStatus: IN_REVIEW
+        toStatus: DONE
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-bar
+        transition: approve
+  expect:
+    fired:
+      - AW001_ai_closure_audit_needed  # AI closure also fires
+      - AW002_ai_bre_bypass
+
+- name: 'shapeup: AI bypasses on ship_task fires AW002'
+  profile: shapeup
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__ship_task
+    tool_input:
+      issueNumber: 11
+      skipValidation: true
+    tool_response:
+      success: true
+      data:
+        issueNumber: 11
+        fromStatus: QA
+        toStatus: SHIPPED
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-baz
+        transition: ship
+  expect:
+    fired:
+      - AW001_ai_closure_audit_needed  # closure trigger fires too
+      - AW002_ai_bre_bypass
+    body_contains: 'agent-baz'
+
+- name: 'human bypass does NOT fire AW002 (G1 PreToolUse handles humans)'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+      skipValidation: true
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      auditEntry:
+        actor:
+          type: human
+          id: bogdan
+        transition: start
+  expect:
+    fired: []
+
+- name: 'AI without skipValidation does NOT fire AW002'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: []
+
+- name: 'AI with skipValidation:false explicitly does NOT fire AW002'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+      skipValidation: false
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: []
+
+# ── AW005: AI suitability violation ─────────────────────────────────
+
+- name: 'hydro: AI attempts human-only task fires AW005'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 99
+    tool_response:
+      success: false
+      data:
+        issueNumber: 99
+      validationResult:
+        canProceed: false
+        details:
+          - stepName: AISuitabilityValidation
+            severity: error
+            message: 'Task #99 is human-only; AI agents cannot perform this transition'
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: [AW005_ai_suitability_violation]
+    severity: error
+    title_contains: 'non-AI-suitable'
+    body_contains: 'suitability_drift'
+
+- name: 'scrum: AI attempts human-only task fires AW005'
+  profile: scrum
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 150
+    tool_response:
+      success: false
+      data:
+        issueNumber: 150
+      validationResult:
+        canProceed: false
+        details:
+          - stepName: AISuitabilityValidation
+            severity: error
+            message: 'AI agents cannot perform transitions on human-only User Stories'
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-bar
+        transition: start
+  expect:
+    fired: [AW005_ai_suitability_violation]
+    title_contains: '#150'
+
+- name: 'shapeup: AI attempts human-only scope fires AW005'
+  profile: shapeup
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 22
+    tool_response:
+      success: false
+      data:
+        issueNumber: 22
+      validationResult:
+        canProceed: false
+        details:
+          - stepName: AISuitabilityValidation
+            severity: error
+            message: 'Scope #22 is human-only; AI agents cannot perform this transition'
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-baz
+        transition: start
+  expect:
+    fired: [AW005_ai_suitability_violation]
+
+- name: 'AI on AI-suitable task with no validation error does NOT fire AW005'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+    tool_response:
+      success: true
+      data:
+        issueNumber: 42
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      validationResult:
+        canProceed: true
+        details: []
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: []
+
+- name: 'AI with non-AISuitabilityValidation error does NOT fire AW005'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 42
+    tool_response:
+      success: false
+      data:
+        issueNumber: 42
+      validationResult:
+        canProceed: false
+        details:
+          - stepName: StatusTransitionValidation
+            severity: error
+            message: 'Cannot transition from BACKLOG to IN_PROGRESS'
+      auditEntry:
+        actor:
+          type: ai-agent
+          id: agent-foo
+        transition: start
+  expect:
+    fired: []
+
+- name: 'human attempting human-only task does NOT fire AW005'
+  profile: hydro
+  input:
+    tool_name: mcp__plugin_ido4dev_ido4__start_task
+    tool_input:
+      issueNumber: 99
+    tool_response:
+      success: true
+      data:
+        issueNumber: 99
+        fromStatus: READY_FOR_DEV
+        toStatus: IN_PROGRESS
+      validationResult:
+        canProceed: true
+        details: []
+      auditEntry:
+        actor:
+          type: human
+          id: bogdan
+        transition: start
+  expect:
+    fired: []

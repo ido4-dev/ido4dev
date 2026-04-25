@@ -657,6 +657,88 @@ sys.exit(1)
   [ "$EVENT_MISMATCH" = "0" ] && pass "rule file event: declarations match hooks.json wiring"
 fi
 
+# ─── Q. Single-writer discipline: open_findings is agent-only ───
+#
+# Phase 4 Stage 4 invariant: only the project-manager agent writes to
+# state.json open_findings[]. Hook rules emit advisory escalation; they
+# do NOT persist findings via post_evaluation.persist. Catches author
+# mistakes that would create rule/agent dedup complexity. See
+# agents/project-manager/AGENT.md "Audit Findings Persistence" section
+# for the why.
+
+echo ""
+echo "▸ Single-writer discipline: open_findings is agent-only"
+SW_BAD=0
+for RF in hooks/rules/*.rules.yaml; do
+  [ -f "$RF" ] || continue
+  # Look for `open_findings` references inside a `post_evaluation:` block
+  AWK_RESULT=$(awk '
+    /^post_evaluation:/ { in_post=1; next }
+    in_post && /^[^[:space:]]/ { in_post=0 }
+    in_post && /open_findings/ { print FILENAME": line "NR": "$0 }
+  ' "$RF")
+  if [ -n "$AWK_RESULT" ]; then
+    fail "$RF — writes to open_findings via post_evaluation (single-writer is the agent only):"
+    echo "$AWK_RESULT" | head -3
+    SW_BAD=$((SW_BAD + 1))
+  fi
+done
+[ "$SW_BAD" = "0" ] && pass "no rule file writes to open_findings (single-writer discipline holds)"
+
+# ─── R. SessionStart banner renders against fixture state.json ───
+#
+# Phase 4 Stage 4 schema-banner drift guardrail: catches the case where
+# state.json gets a new field but the banner script doesn't read it (or
+# the banner script grows a typo against the schema). Fixture covers all
+# enriched fields; failure here means the banner missed a block.
+
+echo ""
+echo "▸ SessionStart banner renders against fixture state.json"
+TMP_BANNER=$(mktemp -d)
+mkdir -p "$TMP_BANNER/hooks"
+cat > "$TMP_BANNER/hooks/state.json" <<'EOF'
+{
+  "version": 1,
+  "last_compliance": {"grade": "B", "score": 78, "timestamp_iso": "2026-04-25T15:00:00Z"},
+  "compliance_history": [
+    {"grade": "B", "score": 78, "timestamp_iso": "2026-04-25T15:00:00Z"},
+    {"grade": "B", "score": 82, "timestamp_iso": "2026-04-24T15:00:00Z"},
+    {"grade": "A", "score": 91, "timestamp_iso": "2026-04-23T15:00:00Z"}
+  ],
+  "open_findings": [
+    {"id": "audit:bypass_pattern:agent-foo:wk17", "title": "Agent foo bypassed 5x this session", "resolved": false, "last_seen": "2026-04-25T16:00:00Z"},
+    {"id": "audit:ghost_closure:agent-bar:wk17", "title": "Closure-with-PR rate dropped to 75%", "resolved": false, "last_seen": "2026-04-25T15:30:00Z"}
+  ],
+  "last_session_audit_summary": {
+    "ghost_closure_triggers": 2,
+    "bypasses": 1,
+    "suitability_violations": 0,
+    "ended_at": "2026-04-25T17:00:00Z"
+  },
+  "ended_at": "2026-04-25T17:00:00Z"
+}
+EOF
+if command -v node &>/dev/null; then
+  BANNER_OUT=$(CLAUDE_PLUGIN_DATA="$TMP_BANNER" node hooks/scripts/session-start-banner.js 2>&1)
+  BANNER_RC=$?
+  rm -rf "$TMP_BANNER"
+  if [ $BANNER_RC -ne 0 ]; then
+    fail "banner script exited non-zero (rc=$BANNER_RC): $BANNER_OUT"
+  elif [ -z "$BANNER_OUT" ]; then
+    fail "banner produced empty output against full-fixture state.json"
+  else
+    BANNER_BAD=0
+    echo "$BANNER_OUT" | grep -q "Resuming" || { fail "banner missing Resume line"; BANNER_BAD=$((BANNER_BAD + 1)); }
+    echo "$BANNER_OUT" | grep -q "Compliance trajectory" || { fail "banner missing Compliance trajectory block"; BANNER_BAD=$((BANNER_BAD + 1)); }
+    echo "$BANNER_OUT" | grep -q "Open audit findings" || { fail "banner missing Open audit findings block"; BANNER_BAD=$((BANNER_BAD + 1)); }
+    echo "$BANNER_OUT" | grep -q "Last session AI audit" || { fail "banner missing Last session AI audit block"; BANNER_BAD=$((BANNER_BAD + 1)); }
+    [ "$BANNER_BAD" = "0" ] && pass "SessionStart banner renders all 4 blocks against fixture state.json"
+  fi
+else
+  rm -rf "$TMP_BANNER"
+  warn "node not available — banner fixture render skipped"
+fi
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

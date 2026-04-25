@@ -278,9 +278,37 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
   "last_assignments": {         // written by assign-task.rules.yaml post_evaluation.persist
     "<issueNumber>": "<container-name>"
   },
-  "open_findings": []           // reserved for future population
+  "compliance_history": [       // Phase 4 Stage 4: cap-4 trajectory, written by compliance-score.rules.yaml
+    { "grade": "A"|"B"|"C"|"D"|"F", "score": 0-100, "timestamp_iso": "<ISO>" }
+  ],
+  "last_session_audit_summary": { // Phase 4 Stage 4: written by SessionEnd from last_rule_fires AW prefixes
+    "ghost_closure_triggers": 0,  //   AW001 fires last session
+    "bypasses": 0,                //   AW002 fires last session
+    "suitability_violations": 0,  //   AW005 fires last session
+    "ended_at": "<ISO>"
+  },
+  "open_findings": [            // Phase 4 Stage 4: written by project-manager AGENT only (single-writer discipline)
+    {
+      "id": "audit:<category>:<actor_id>:<scope>",
+      "source": "pm-agent",
+      "category": "bypass_pattern" | "ghost_closure" | "rubber_stamp" | "suitability_drift" | "actor_fragmentation",
+      "title": "<short headline shown in SessionStart banner>",
+      "summary": "<1-3 sentence body>",
+      "actor_type": "ai-agent",
+      "actor_id": "<agent identifier>",
+      "first_seen": "<ISO>",
+      "last_seen": "<ISO>",
+      "resolved": false,
+      "resolved_at": null,
+      "evidence": { "task_ids": [], "transitions": [], "metrics": {} }
+    }
+  ]
 }
 ```
+
+**Single-writer discipline for `open_findings[]`:** the project-manager agent is the only writer. Hook rules emit advisory escalation (per Phase 3 Stage 7 advisory pattern); they do NOT persist findings via `post_evaluation.persist`. Validate-plugin.sh §Q grep-checks rule files for `open_findings` references inside `post_evaluation:` blocks and fails the build if found. The agent's body in `agents/project-manager/AGENT.md` "Audit Findings Persistence" section documents the schema, lifecycle (create / update / resolve), thresholds (per-category), and the bounded cap (20 findings, FIFO eviction by `first_seen`).
+
+**SessionEnd's role in `last_session_audit_summary`:** at SessionEnd, `hooks/scripts/session-end-state.js` scans `last_rule_fires` keys for AW rule prefixes (`AW001_*`, `AW002_*`, `AW005_*`), counts unique `<rule_id>:<scope>` pairs by category, stamps the totals into `last_session_audit_summary`, and clears those AW entries from `last_rule_fires` so the next session starts with a clean count. Non-AW entries (G1/G3/G5/CS/CH/AT) are preserved (they may still be debounce-relevant). If `total === 0`, the summary field is cleared instead of stamped — silence-when-empty avoids surfacing stale zeros at next SessionStart.
 
 ### Type coercion (Stage 5 fix)
 

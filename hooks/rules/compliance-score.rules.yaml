@@ -73,6 +73,12 @@ rules:
 # After every evaluation, replace the baseline in state with the current measurement.
 # This is what makes the stateful rules above work across calls/sessions.
 # Expression returns a full snapshot of the fields the rules will diff against next time.
+#
+# Phase 4 Stage 4 addition: compliance_history. A bounded array (cap 4) of
+# recent measurements that the SessionStart banner reads to surface
+# trajectory ("A → B → B"). last_compliance is for stateful diffs (CS001/CS002);
+# compliance_history is for human-readable trend display. The two serve
+# different purposes and don't overlap.
 post_evaluation:
   persist:
     last_compliance: |
@@ -83,3 +89,12 @@ post_evaluation:
         summary: tool_response.data.summary,
         timestamp_iso: now_iso,
       })
+    compliance_history: |
+      [
+        ({
+          grade: tool_response.data.grade,
+          score: tool_response.data.score,
+          timestamp_iso: now_iso,
+        }),
+        ...((Array.isArray(state.compliance_history) ? state.compliance_history : []).slice(0, 3))
+      ]

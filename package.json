@@ -4,6 +4,6 @@
   "private": true,
   "description": "Dependencies for the ido4dev governance plugin. Installed automatically via SessionStart hook.",
   "dependencies": {
-    "@ido4/mcp": "^0.8.0"
+    "@ido4/mcp": "^0.8.1"
   }
 }

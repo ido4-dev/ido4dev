@@ -137,28 +137,57 @@ Two architectural extensions to Phase 3, no new primitives:
 
 ### 4.1 Profile-aware PM agent identity (plugin-only, per §7.5)
 
-The agent loads identity-affecting content from `.ido4/methodology-profile.json` at invocation. The profile already exposes (via `ProfileConfigLoader`):
-- `principles: [{name, description}, ...]` — replaces the 5-Unbreakable-Principles hardcoding
-- `containers` — terminology for Wave/Sprint/Cycle (and any future methodology's container concept)
-- `states` — state-machine semantics (per-state name + role)
-- `workItems` — terminology for tasks/items/stories
+**Design pattern: instruction-based, not template-based.** Pre-Stage-1 research (claude-code-guide subagent over Anthropic's plugin-agent docs, 2026-04-25) confirmed that Claude Code's plugin-agent runtime injects the agent body wholesale as a static system prompt — no template substitution, no Mustache, no `${...}` resolution. Profile awareness is achieved by **instructing the agent in prose to read `.ido4/methodology-profile.json` at the start of every invocation and apply what it loads**. The agent body teaches Claude how to be profile-aware; the body itself stays methodology-neutral.
 
-The agent prompt body uses Mustache-style references resolved at session start. The `tools:` frontmatter already contains `Read` (current file line 5: `tools: mcp__plugin_ido4dev_ido4__*, Read, Grep, Glob`), so no frontmatter change is needed.
+The `tools:` frontmatter already contains `Read` (current file line 5: `tools: mcp__plugin_ido4dev_ido4__*, Read, Grep, Glob`); the `Read` tool resolves relative paths against the user's project working directory, so `Read('.ido4/methodology-profile.json')` works as expected. The agent runs in a **fresh subagent context** at invocation (does NOT inherit the calling conversation), which makes the read-at-invocation pattern necessary, not just convenient — the agent has no other way to learn the active profile.
 
-Sections that change:
-- **Description** (frontmatter, line 3) — was `"AI Project Manager with wave-based development governance expertise"`, becomes `"AI Project Manager — auditing AI agents' work product against the active methodology"`. Methodology-neutral; the body adapts.
-- **Identity section** — minor copy edit; remove "wave-based" phrasing.
-- **The 5 Unbreakable Principles** — entire section becomes profile-driven. Body iterates over `profile.principles[]` and renders them with the same "Why it matters / How you apply it" framing using methodology-aware terminology.
-- **Governance Mental Model → State Machine** — flow diagram and state semantics become profile-driven. The Backlog→Refinement→Ready→In Progress→In Review→Done graph is Hydro/Scrum-specific; Shape Up has Shaped→Betting→Building→Shipped/Killed. Body iterates `profile.states[]`.
-- **Wave Lifecycle Awareness** — renamed to "Container Lifecycle Awareness," body uses `profile.containers.execution.label` (Wave / Sprint / Cycle) and the same lifecycle bands (early/mid/late/completion).
+**Profile schema (verified against `~/dev-projects/ido4/packages/core/src/profiles/types.ts`):**
 
-Sections that stay:
-- BRE understanding, Decision Framework (Prioritization Hierarchy + Data-Backed Decision Making), Communication Style, Hard Constraints, Tool Composition Patterns (extended in §4.3).
+```typescript
+interface MethodologyProfile {
+  states: StateDefinition[];
+  transitions: TransitionDefinition[];
+  semantics: { initialState, terminalStates[], blockedStates[],
+               activeStates[], readyStates[], reviewStates[] };
+  containers: ContainerTypeDefinition[];      // ARRAY, not map
+  integrityRules: IntegrityRuleDefinition[];  // separate from principles
+  principles: PrincipleDefinition[];          // count varies per methodology
+  workItems: WorkItemsDefinition;             // .primary.singular/plural
+  pipelines: Record<string, { steps: string[] }>;
+  compliance: { lifecycle, alternateLifecycles?, weights };
+  behaviors: { closingTransitions[], blockTransition?, returnTransition? };
+}
+```
 
-Sections that get refactored under the audit framing:
-- **Risk Detection** → renamed **Audit Patterns**; scoped to AI work-product (see §4.2).
-- **Memory Management** → tightens around `state.json open_findings[]` semantics (see §4.4); MEMORY.md authorship dropped per §7.8.
-- **Multi-Agent Awareness** → preserves agent-coordination concerns; restructured around `actor.type` distinction.
+**The "execution container" is not a labeled field** — the agent's prose teaches inference: it's the entry in `profile.containers[]` with `singularity: true` and `completionRule: 'all-terminal'`. Hydro: `wave`. Scrum: `sprint`. Shape Up: `cycle`.
+
+**Principle counts vary across methodologies** (verified against actual profile data files):
+- **Hydro: 5 principles** — Epic Integrity, Active Wave Singularity, Dependency Coherence, Self-Contained Execution, Atomic Completion (matches the agent's current hardcoding)
+- **Scrum: 1 principle** — Sprint Singularity only; the rest of "DoR/DoD/sprint-goal" lives in `integrityRules[]` + validation steps, NOT in `principles[]`
+- **Shape Up: 4 principles** — Bet Integrity, Active Cycle Singularity, Circuit Breaker, Fixed Appetite
+
+The agent prose cannot reference "the 5 principles" or any fixed count. Phrasing must be "the principles defined in your profile."
+
+**`MethodologyConfig.fromProfile()`** is a transparent wrapper for BRE pipeline lookup, not a derived-data engine (verified at `packages/core/src/config/methodology-config.ts:121-129`). The agent should template instructions against raw `MethodologyProfile`, not `MethodologyConfig`.
+
+**Sections that change in `agents/project-manager/AGENT.md`:**
+
+- **Description** (frontmatter line 3) — methodology-neutral, static (frontmatter does NOT template; closes open execution decision §8.4). New: `"AI Project Manager — audits AI agents' work product and synthesizes governance signals against the active methodology profile."`
+- **NEW Bootstrap section** (opens body) — instructs Claude to read `.ido4/methodology-profile.json` and internalize `principles[]`, `semantics`, `containers[]`, `workItems.primary`, `compliance.weights`, `behaviors`. Names the execution-container inference rule.
+- **The 5 Unbreakable Principles** — replaced with **Foundational Principles** section. Drops "Unbreakable" framing per §3.7 (which calls out absolutist language that violates Opus 4.5/4.6 response patterns). Body instructs the agent to apply `profile.principles[]` as reasoning constraints, includes per-methodology examples for context, explains severity-tier semantics (`error` blocks; `warning` recommends caution).
+- **Governance Mental Model → State Machine** — replaces the hardcoded Hydro flow diagram with an instruction: read state machine from `profile.states[]`, `profile.transitions[]`, `profile.semantics`; use the loaded profile's terminology when explaining transitions.
+- **Wave Lifecycle Awareness** — renamed to **Container Lifecycle Awareness**. Body uses the execution container's `singular`/`plural` labels; same early/mid/late/completion bands; references the methodology's terminal-state semantics from `profile.semantics.terminalStates`.
+
+**Sections that stay (methodology-neutral already):** Identity (minor copy edit to drop "wave-based"), BRE understanding, Decision Framework's Prioritization Hierarchy + Data-Backed Decision Making, Communication Style, Hard Constraints (drop absolutist phrasing per §3.7), Diagnostic Reasoning.
+
+**Sections that get refactored under the audit framing:**
+
+- **Risk Detection → Audit Patterns** — scoped to AI work-product per §4.2; uses `actor.type === 'ai-agent'` as the filter; drops methodology-specific examples (e.g., "wave tasks" → "active container's tasks").
+- **Memory Management → Audit Findings Persistence** — drops MEMORY.md authorship (per §7.8 four-layer model resolution); replaces with the `state.json open_findings[]` schema and lifecycle (per §4.4); single-writer discipline foregrounded.
+- **Multi-Agent Awareness** — preserves coordination patterns; restructures around `actor.type` distinction; AI-vs-human work scoping for audit.
+- **Tool Composition Patterns** — `Before Any Wave Plan` → `Before Any Container Plan`; new patterns for AI Work-Product Audit; references `actorType` filter (Stage 3 cross-repo beat).
+
+**Section that's dropped:** The original `## Governance Memory Architecture` section (~30 lines) about MEMORY.md feedback loops with retro/standup/plan/compliance ceremonies. Per §7.8 the four-layer model holds without MEMORY.md authorship; the loop is preserved in spirit (each ceremony's findings reach the next session) via state.json's open_findings[] + the SessionStart banner enrichment in Stage 4.
 
 ### 4.2 AI-work-product auditor as foreground job
 
@@ -386,7 +415,7 @@ These are flagged here so they get resolved in the right stage, not swept:
 
 3. **Resolution semantics for findings.** When does `resolved=true` get set? Proposed: on next audit, if the same pattern doesn't repeat for the same `actor_id+category`, agent marks resolved. No user "resolve" command in Phase 4 (could be added later if pain surfaces). Resolve in Stage 4.
 
-4. **Profile-driven agent description vs. body content.** Agent's frontmatter `description:` may not template (verify against current Claude Code agent loading semantics). If it doesn't template, keep the description methodology-neutral and put all profile-aware content in the body. Resolve in Stage 1.
+4. ~~**Profile-driven agent description vs. body content.**~~ **RESOLVED 2026-04-25 (Stage 1 pre-research).** Anthropic's plugin-agent docs confirm: frontmatter `description:` is static, baked at plugin load, no template substitution. The description must be methodology-neutral, period. ALL profile-aware content lives in the body, achieved via in-prose instructions to read `.ido4/methodology-profile.json` at invocation. The fresh-subagent-context invocation model (agent does NOT inherit calling conversation) makes the read-at-invocation pattern necessary, not just convenient.
 
 5. **AW004 actor-fragmentation rule feasibility.** Whether AW004 fits in Stage 2 vs. moves to agent-side computation depends on whether the existing `state.last_assignments` (Phase 3 Stage 5) carries enough data for the rule to fire deterministically. Investigate at Stage 2 start; commit choice in the Stage 2 commit message.
 
@@ -417,6 +446,7 @@ These are flagged here so they get resolved in the right stage, not swept:
 | Date | Update |
 |---|---|
 | 2026-04-25 | Brief drafted. Predecessor `phase-3-brief.md` shipped same day; Phase 3 closed clean (commits c0a22d2, 0e17edf, ebabb20). Three pre-drafting research streams: (1) Routines vs `CronCreate` primitive distinction surfaced — Routines is cloud-scheduled durable substrate, account-scoped, runs blind to `state.json`/skills/`${CLAUDE_PLUGIN_DATA}`; `§7.6` rewritten. Routines deferred per user 2026-04-25. (2) Mission reframing — agent's job is on-demand AI-work-product auditor on behalf of the human overseer (audit subject = AI; consumer = human), not "AI PM doing morning rounds." (3) Data-surface investigation — `actor.type: 'human' \| 'ai-agent' \| 'system'` is structural and typed at engine; `aiSuitability` field fully wired with `'human-only' \| 'ai-only' \| 'ai-reviewed' \| 'hybrid'` values + BRE-validated; one small engine ask needed (`actorType` filter on `query_audit_trail`, ~5 LOC). Tier B metrics (PR body, comment trails, spec lineage) deferred to Phase 5 with `§7.10` entry. Phase 4 ships local-substrate-only: profile-aware PM agent rebuild + audit hook rules + Tier A metrics + SessionStart banner enrichment + `state.json open_findings[]` as canonical audit-finding store under single-writer discipline. 5 stages. Awaiting commit. |
+| 2026-04-25 | **Stage 1 pre-research correction — design pattern shift from template-based to instruction-based.** Two parallel research streams (Explore agent over engine code + claude-code-guide over Anthropic plugin-agent docs): (1) Claude Code's plugin-agent runtime injects body wholesale as static system prompt — no template substitution, no Mustache, no `${...}` resolution; (2) profile schema is more granular than brief assumed (containers is an array, not a map; "execution container" is not a labeled field but inferred from `singularity: true && completionRule: 'all-terminal'`; `MethodologyConfig.fromProfile` is a transparent wrapper not a derived-data engine; `compliance.weights` are profile-specific so the same compliance drop matters differently per methodology); (3) principle counts vary dramatically across methodologies (Hydro 5, Scrum 1, Shape Up 4) — agent prose can't reference any fixed count; (4) the agent runs in a fresh subagent context at invocation, does NOT inherit the calling conversation — read-at-invocation pattern is necessary, not optional. **Brief §4.1 rewritten** to commit to the instruction-based pattern + corrected schema field references. **Open execution decision §8.4 (description templating) resolved**: frontmatter is static + methodology-neutral; ALL profile-aware content lives in body via in-prose read-and-apply instructions. Side finding: the current PM agent uses absolutist language (5 *Unbreakable* Principles, MUST/NEVER/Cannot) that violates `architecture-evolution-plan.md §3.7` + `~/dev-projects/ido4-suite/docs/prompt-strategy.md §4` Opus-4.5/4.6 guidance — Stage 1 reframes principles as foundational reasoning constraints with motivations, not absolute prohibitions. Impact radius confirmed small: PM agent referenced from README/CLAUDE.md (mentions only) + one rule (`compliance-score.rules.yaml:36 escalate_to: project-manager`); no skills reference the agent directly. Phase 3-style research-first discipline carrying forward — caught these before any code/prose changed. |
 
 ---
 

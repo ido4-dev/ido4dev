@@ -774,6 +774,37 @@ fi
 
 [ "$RTM_BAD" = "0" ] && pass "PM AGENT.md teaches read-then-mutate (header + rationale + code example)"
 
+# ─── T. Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02) ───
+#
+# OBS-02 reproduction (sandbox-ux-findings-2026-04-25.md): the skill loaded
+# but Claude waited for the user to say what to do next, instead of executing
+# Phase 1 Step 1 (asking for repo + methodology). Root cause: the SKILL.md
+# opening read as descriptive prose, not imperative instructions. Same fix
+# pattern as ingest-spec commit 56b12ac.
+#
+# This check verifies the imperative directive prose is present. Catches doc
+# drift; structural enforcement of skill activation behavior isn't viable
+# (the model decides what to do on skill load).
+#
+# Phase 5 OBS-02 fix per docs/phase-5-brief.md §4.4.
+
+echo ""
+echo "▸ Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02)"
+SANDBOX_MD="$PLUGIN_ROOT/skills/sandbox/SKILL.md"
+SANDBOX_BAD=0
+
+if [ ! -f "$SANDBOX_MD" ]; then
+  fail "sandbox SKILL.md not found at $SANDBOX_MD"
+  SANDBOX_BAD=$((SANDBOX_BAD + 1))
+else
+  grep -q "Execute [Ii]mmediately" "$SANDBOX_MD" \
+    || { fail "sandbox SKILL.md missing 'Execute Immediately' imperative directive (Phase 5 OBS-02 prose)"; SANDBOX_BAD=$((SANDBOX_BAD + 1)); }
+  grep -q "this body IS the instructions" "$SANDBOX_MD" \
+    || { fail "sandbox SKILL.md missing 'this body IS the instructions' anti-pattern callout (Phase 5 OBS-02 prose)"; SANDBOX_BAD=$((SANDBOX_BAD + 1)); }
+fi
+
+[ "$SANDBOX_BAD" = "0" ] && pass "sandbox SKILL.md has imperative auto-prompt directive (header + anti-pattern callout)"
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

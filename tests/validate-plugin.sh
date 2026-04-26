@@ -739,6 +739,41 @@ else
   warn "node not available — banner fixture render skipped"
 fi
 
+# ─── S. Read-then-mutate discipline in PM agent prose (Phase 5 F2) ───
+#
+# The PM agent is the single writer of state.json open_findings[]. The Write
+# tool overwrites the entire file, so the discipline is "read first, mutate
+# ONLY open_findings, write the whole object back" — otherwise runner-written
+# fields (last_rule_fires, last_compliance, compliance_history,
+# last_session_audit_summary) are silently blasted.
+#
+# AGENT.md teaches this discipline in prose with a code-shaped example. This
+# check verifies the prose is present and coherent. Structural enforcement of
+# the agent's own write behavior isn't viable (the agent has Write access and
+# is an LLM, not a deterministic process), so the prose-grep guards against
+# doc drift — someone removing the section without realizing what it does.
+#
+# Phase 5 F2 fix per docs/phase-5-brief.md §4.2.
+
+echo ""
+echo "▸ Read-then-mutate discipline present in PM AGENT.md (Phase 5 F2)"
+AGENT_MD="$PLUGIN_ROOT/agents/project-manager/AGENT.md"
+RTM_BAD=0
+
+if [ ! -f "$AGENT_MD" ]; then
+  fail "PM AGENT.md not found at $AGENT_MD"
+  RTM_BAD=$((RTM_BAD + 1))
+else
+  grep -q "Read-then-mutate" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing 'Read-then-mutate' section header (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
+  grep -q "preserve runner-written fields" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing 'preserve runner-written fields' rationale (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
+  grep -q "JSON.parse(readFile" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing read-then-mutate code-shaped example (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
+fi
+
+[ "$RTM_BAD" = "0" ] && pass "PM AGENT.md teaches read-then-mutate (header + rationale + code example)"
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

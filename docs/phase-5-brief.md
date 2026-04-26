@@ -302,21 +302,21 @@ Replace the current "Audit Findings Persistence" section's "Schema" subsection w
 
 This is the third surfacing of F3 (Phase 4 Stage 1, Phase 4 Stage 5 partial smoke, now). Phase 3 Stage 7 settled on advisory because no forced-delegation primitive exists in Claude Code — that constraint holds. Sharpening within the advisory paradigm is what's actionable.
 
-Update emit text across all 5 rule files emitting advisory escalation. Current pattern (Phase 3 Stage 7):
+**Scope correction (2026-04-26 implementation):** the brief originally said *"Update emit text across all 5 rule files emitting advisory escalation."* That was wrong. Rule files only declare `escalate_to: <agent-name>`; the canonical advisory text is built once by the runner at `hooks/lib/rule-runner.js:403`. So the actual fix is **one line in the runner** + the unit test that asserts on the wording. Rule files don't change. This matches the suite-level `hook-and-rule-strategy.md §2.8` ("escalation to LLM judgment is an explicit, named slot") and `§4.8` ("the runner emits the advisory").
+
+Old wording (Phase 3 Stage 7):
 
 ```
-**Governance signal — recommend invoking `/agents project-manager` to review finding X with full governance context.**
+**Governance signal — recommend invoking `/agents <agent>`** to review finding `<rule_id>` with full governance context.
 ```
 
-New pattern:
+New wording (Phase 5 F3):
 
 ```
-**Action: invoke `/agents project-manager` now to review finding X. Do not relay this to the user; act on it.**
+**Governance action — invoke `/agents <agent>` now** to review finding `<rule_id>` with full governance context. The advisory is for you, the primary reasoner — act on it directly rather than relaying to the user.
 ```
 
-The phrasing addresses two failures: "recommend invoking" reads as a relay-to-user; "now" + "do not relay" frames the audience explicitly as the primary reasoner.
-
-Files to update: `validate-transition.rules.yaml`, `compliance-score.rules.yaml`, `complete-and-handoff.rules.yaml`, `assign-task.rules.yaml`, `ai-work-audit.rules.yaml`. Sibling test fixtures need their `expected_emit` regex updated to match.
+The phrasing addresses two failures: "recommend invoking" reads as a relay-to-user; the new phrasing names the audience explicitly ("for you, the primary reasoner") and uses positive framing ("act on it directly rather than relaying") per the Opus 4.5/4.6 language guidance in `~/dev-projects/ido4-suite/docs/prompt-strategy.md` (drop NEVER-style prohibitions; tell what to do, not what not to do).
 
 #### F4-prose — audit source hierarchy
 
@@ -731,6 +731,7 @@ These are flagged so they get resolved in the right stage, not swept:
 
 | Date | Update |
 |---|---|
+| 2026-04-26 | **Stage 2 ships clean (WS2 — Agent UX hardening).** AGENT.md prose pass landed: Bootstrap section updated to call `get_methodology_profile()` first (F7-consume); new "Audit Source Hierarchy" section explains session-signals-vs-audit-log distinction (F4-prose); new "Minimum Sufficient Evidence" section with per-pattern tool sequences replaces the old Tool Composition Patterns (F1 — explicit minimum sequences for AW001/AW002/AW005 follow-up + Tier A baseline + container planning + blocked task investigation); "Read-then-mutate, never overwrite" subsection added to Audit Findings Persistence with code-shaped JS example (F2). Net file size 387 lines (was 420; -33 net despite three new sections) per prompt-strategy iteration-accumulation discipline — cuts came from trimming the kitchen-sink Diagnostic Reasoning section (was 30 lines of edge-case enumeration; now 1 motivated principle + 1 worked example), tightening Communication Style generics, and consolidating Audit Patterns into Audit Methodology. F3 scope correction surfaced during implementation: advisory text is built once by `hooks/lib/rule-runner.js:403`, NOT in 5 rule files as the brief originally said. Fix landed as one-line wording change + sharpened unit test at `tests/rule-runner-unit.test.mjs:292` (asserts new "Governance action" prefix + "primary reasoner" audience naming + "rather than relaying" positive framing). New `validate-plugin.sh §S` greps AGENT.md for the read-then-mutate prose markers (header + rationale + JSON.parse code example) — catches doc drift; structural enforcement of agent write-behavior isn't viable since the agent has Write tool access. Tests: 88 unit + 89 integration + 112 validate-plugin (was 88/89/111; +1 for §S). Brief §4.2 F3 corrected to reflect the actual scope. Stages 3 (WS4 sandbox UX) and 4 (WS3 Tier B) unblocked. Stage 5 (WS5 closing smoke) sequenced last. Engine release deferred to Stage 4 close per §7 batching guidance — `9ad6af0` engine commit (F4/F5/F6/F7) sits on `ido4` main waiting for WS3+WS4 engine work to bundle into single `@ido4/mcp@0.9.0` release. |
 | 2026-04-26 | Brief drafted. Five workstreams committed. Pre-drafting investigations: (1) F5 root cause traced to `task-workflow-service.ts:165-166` fallback throw; ~10-15 LOC fix. (2) F6 schema delta scoped to ~5 LOC engine + zod. (3) F7 confirmed: subagents cannot read MCP resources per Anthropic docs (claude-code-guide research over `code.claude.com/docs/en/mcp-servers.md`); `ido4://methodology/profile` resource unreachable from PM agent; `get_methodology_profile` tool needed. (4) F4 mechanism confirmed at `task-service.ts:267`; option (c) chosen over ledger's option (b) — persist all attempts with explicit `executed: boolean`; cleaner for §3.9 institutional-memory thesis (attempted bypass is meaningful audit signal). (5) OBS-01 confirmed as Anthropic platform regression #24425/#11120/#23875; plugin-side resolution via `/ido4dev:status` skill. (6) WS3 engine surface gaps re-verified — `pull.body` not in `find_task_pr` response; `get_task_comments` doesn't exist; spec lineage transient. **Senior-architect lens additions beyond §7.10 original scope:** F7 (newly named — was Phase 4 Stage 1 watch-item F2); WS4 sandbox UX folded in for real-release readiness (was §7.9 standing initiative); WS5 expanded to absorb release readiness (doc freshness, error UX, full skill suite smoke, platform-limit honesty); Round-4 silent-failure gaps partially folded into WS3 via `ingest-spec` post-validation surface; F4 elevated from option (b) to option (c). **§7.10 elements verified absorbed:** F1-F6, Tier B (PR body + comments + lineage + privacy), comprehensive closing smoke. **Open observations from previous tests verified handled:** e2e-006 F1-F6 (all WS1+WS2); phase-4-stage-1 F2/F3 (WS1+WS2); e2e-005 OBS-01 (WS5); sandbox-ux OBS-02-09 (WS4); e2e-004 OBS-03 platform quirk (WS5 docs); round-4 silent-failure gaps (WS3 partial + ido4specs upstream). **Aggregate estimate:** ~17-23 working days. WS1+WS2 sequenced (Stage 1 → Stage 2); WS3+WS4 parallel with Stages 2-3; WS5 sequential close. Awaiting commit. |
 
 ---

@@ -289,15 +289,24 @@ check('validateRuleFile rejects legacy escalate_mode field with a clear error', 
   } catch (e) { assertTrue(/escalate_mode/.test(e.message), `error message mentions escalate_mode: ${e.message}`); }
 });
 
-check('formatHookResponse emits strong governance-signal recommendation for escalate_to', () => {
+check('formatHookResponse emits Phase 5 F3 imperative governance-action wording for escalate_to', () => {
+  // Phase 5 F3: the advisory wording was sharpened from "recommend invoking"
+  // to imperative + audience-explicit phrasing because the soft "recommend"
+  // language read as a relay-to-user message. Primary reasoners did not
+  // auto-route (empirically reproduced 3× in Phase 4 verification). New
+  // wording names the audience explicitly and uses positive framing.
   const result = {
     findings: [{ rule_id: 'A', severity: 'warning', title: 'T' }],
     escalate: [{ rule_id: 'A', agent: 'project-manager' }],
   };
   const resp = runner.formatHookResponse(ev({}, {}), result);
-  assertTrue(resp.hookSpecificOutput.additionalContext.includes('/agents project-manager'), 'agent reference included');
-  assertTrue(resp.hookSpecificOutput.additionalContext.includes('Governance signal'), 'signal prefix included');
-  assertTrue(resp.hookSpecificOutput.additionalContext.includes('A'), 'rule_id surfaces');
+  const ctx = resp.hookSpecificOutput.additionalContext;
+  assertTrue(ctx.includes('/agents project-manager'), 'agent reference included');
+  assertTrue(ctx.includes('Governance action'), 'imperative prefix included');
+  assertTrue(ctx.includes('invoke') && ctx.includes('now'), 'imperative action verb + immediacy');
+  assertTrue(ctx.includes('primary reasoner'), 'audience named explicitly');
+  assertTrue(ctx.includes('rather than relaying'), 'positive framing of non-relay constraint');
+  assertTrue(ctx.includes('A'), 'rule_id surfaces');
 });
 
 check('formatHookResponse with no findings and no escalate returns empty object', () => {

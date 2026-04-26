@@ -395,12 +395,16 @@ function formatHookResponse(event, result, ruleFile) {
     return parts.join('\n\n');
   });
 
-  // Escalation is advisory: rules with escalate_to surface a strong
-  // recommendation to delegate to the named agent. Opus-class reasoners
-  // reliably action these recommendations when surfaced in additionalContext.
-  // See phase-3-brief.md §4.4 for the rationale.
+  // Escalation is advisory: rules with escalate_to surface an action prompt
+  // for the primary reasoner. Phase 5 F3 sharpened the wording — earlier text
+  // ("recommend invoking ...") read as a relay-to-user message and primary
+  // reasoners did not auto-route on it (empirically reproduced 3× in Phase 4
+  // verification). New phrasing names the audience explicitly and uses
+  // imperative + positive framing per the Opus 4.5/4.6 language guidance in
+  // ~/dev-projects/ido4-suite/docs/prompt-strategy.md §"Language guidance".
+  // See phase-3-brief.md §4.4 + phase-5-brief.md §4.2 F3 for the rationale.
   const escalateBlocks = result.escalate
-    .map((e) => `**Governance signal — recommend invoking \`/agents ${e.agent}\`** to review finding \`${e.rule_id}\` with full governance context.`);
+    .map((e) => `**Governance action — invoke \`/agents ${e.agent}\` now** to review finding \`${e.rule_id}\` with full governance context. The advisory is for you, the primary reasoner — act on it directly rather than relaying to the user.`);
 
   const additionalContext = [...blocks, ...escalateBlocks].filter(Boolean).join('\n\n---\n\n');
 

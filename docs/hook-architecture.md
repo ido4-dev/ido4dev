@@ -461,6 +461,36 @@ The overarching rule: **hooks must not break sessions**. Errors degrade silently
 
 ---
 
+## Privacy — what content reaches the agent and where it lives
+
+The Tier A audit metrics (1–7 in `agents/project-manager/AGENT.md`) reason over state shape: who transitioned what, when, with what flags. They never read PR body text or comment text.
+
+The Tier B audit metrics (8–10), added in `@ido4/mcp@0.9.0`, **do** read content:
+
+- `find_task_pr.pull.body` — full PR description text from GitHub
+- `get_task_comments[].body` — full text of every comment on the issue
+- `get_task_lineage` returns only the spec-side ref, never content
+
+These bodies may contain customer names, internal-system references, security-sensitive details, or unreleased business decisions. Be honest about where the content travels.
+
+**What ido4dev does with this content:**
+
+- **Reads it via MCP tool calls.** The PM agent fetches PR/comment content during a Tier B audit pass. The content reaches Claude's main-conversation context for reasoning.
+- **Surfaces metrics, not content.** Findings persisted to `state.json open_findings[]` carry only metric values, task IDs, actor IDs, and ISO timestamps. The `evidence` field captures `task_ids`, `transitions`, and `metrics` — never excerpts of bodies or comments.
+- **Does not exfiltrate.** All MCP tool calls run in the user's local Claude Code session; the plugin makes no outbound network calls of its own. Content visibility is bounded by Claude Code's own boundaries — same trust model as any read of a local file.
+- **Does not log content to disk.** Hook stdout is JSON for the runner's response shape only. PR/comment bodies appear in Claude's conversation context and the user's transcript; they don't get persisted under `${CLAUDE_PLUGIN_DATA}/`.
+
+**Operational guidance:**
+
+- **Tier B is opt-in per audit.** The PM agent's `Tier B follow-up` minimum-sufficient sequence runs only when the user explicitly asks for a content audit (or when Tier A is healthy enough that the question shifts from "did the artifact exist" to "what was in it"). Don't run by default.
+- **For sensitive contexts**, evaluate whether Tier B is appropriate before invoking. Redaction primitives are tracked as v1.1 work; v1.0 ships with full-content visibility.
+- **`get_task_comments` actor classification is heuristic** — it tags comments as `'ai-agent'` when the body contains the `<!-- ido4:context ... -->` marker (written by `formatIdo4ContextComment`), otherwise `'human'`. A human typing a comment that copies the marker pattern verbatim would be misclassified; the heuristic is informational, not a security boundary.
+- **Lineage markers are advisory, not authoritative.** `get_task_lineage` reads an HTML comment in the issue body. A user editing the body to remove the marker breaks the lineage signal. The audit treats `ref: null` as informational, not as evidence of misconduct.
+
+The boundary is the Claude Code session: content the agent reads is scoped to whoever runs it. If the user runs the audit, they see what the audit sees. The plugin doesn't move content beyond that boundary.
+
+---
+
 ## Current rule inventory
 
 As of Stage 7 (2026-04-24):

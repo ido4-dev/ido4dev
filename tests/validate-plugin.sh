@@ -805,6 +805,46 @@ fi
 
 [ "$SANDBOX_BAD" = "0" ] && pass "sandbox SKILL.md has imperative auto-prompt directive (header + anti-pattern callout)"
 
+# ─── U. Silent-failure scan in ingest-spec SKILL.md (Phase 5 WS3) ───
+#
+# Round-4 audit (reports/round-4-rule-audit.md "Silent-failure gaps") found
+# three input shapes the upstream tech-spec-format parser accepts but the
+# downstream mapping silently drops or downgrades:
+#   - "Effort: XL"     — XL silently buckets to L (Large)
+#   - "## Group:"      — unrecognized heading; tasks below become orphans
+#   - malformed task ref ("### foo-01:" — no PREFIX-NN) — line absorbed into body
+#
+# Full parser hardening is upstream ido4specs work; this skill closes the gap
+# from the ido4dev side by scanning for the patterns and surfacing warnings
+# before the dry-run preview, so the user makes an informed call.
+#
+# This check verifies the prose stays present. Structural enforcement of
+# Bash-tool execution behavior isn't viable; prose-grep guards against doc
+# drift removing the scan section.
+#
+# Phase 5 WS3 fix per docs/phase-5-brief.md §4.3.
+
+echo ""
+echo "▸ Silent-failure scan in ingest-spec SKILL.md (Phase 5 WS3)"
+INGEST_MD="$PLUGIN_ROOT/skills/ingest-spec/SKILL.md"
+INGEST_BAD=0
+
+if [ ! -f "$INGEST_MD" ]; then
+  fail "ingest-spec SKILL.md not found at $INGEST_MD"
+  INGEST_BAD=$((INGEST_BAD + 1))
+else
+  grep -q "Silent-failure scan" "$INGEST_MD" \
+    || { fail "ingest-spec SKILL.md missing 'Silent-failure scan' section header (Phase 5 WS3)"; INGEST_BAD=$((INGEST_BAD + 1)); }
+  grep -q "XL effort" "$INGEST_MD" \
+    || { fail "ingest-spec SKILL.md missing XL-effort pattern hint (Phase 5 WS3)"; INGEST_BAD=$((INGEST_BAD + 1)); }
+  grep -q "## Group:" "$INGEST_MD" \
+    || { fail "ingest-spec SKILL.md missing unrecognized-heading pattern hint (Phase 5 WS3)"; INGEST_BAD=$((INGEST_BAD + 1)); }
+  grep -q "malformed task ref" "$INGEST_MD" \
+    || { fail "ingest-spec SKILL.md missing malformed-task-ref pattern hint (Phase 5 WS3)"; INGEST_BAD=$((INGEST_BAD + 1)); }
+fi
+
+[ "$INGEST_BAD" = "0" ] && pass "ingest-spec SKILL.md teaches silent-failure scan (header + 3 pattern hints)"
+
 # ─── J. Claude Code Native Validation ───
 
 echo ""

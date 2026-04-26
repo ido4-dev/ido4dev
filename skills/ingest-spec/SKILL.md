@@ -73,9 +73,40 @@ The `SessionStart` hook copies the bundle to `~/.claude/plugins/data/<plugin-dir
 
 The validator prints a JSON object to stdout with shape `{valid, meta, metrics, project, groups, errors, warnings}`.
 
-**If `valid: true`:** report a concise one-liner ("Structural validation passed: N capabilities, M tasks") and proceed to the project-init check below.
+**If `valid: true`:** report a concise one-liner ("Structural validation passed: N capabilities, M tasks"), run the silent-failure scan below, then proceed to the project-init check.
 
 **If `valid: false`:** present the errors with task refs. Tell the user to fix the spec upstream (via `/ido4specs:refine-spec` or another `/ido4specs:validate-spec` pass) and re-run. Also perform the project-init check below so the user sees both issues in one pass, then STOP. Do NOT proceed to `ingest_spec` — passing a malformed spec to the ingestion pipeline wastes a tool call and produces a confusing error that originates from a different layer than the root cause.
+
+### Silent-failure scan
+
+The upstream `tech-spec-format` parser is lenient on three input shapes — it emits no errors, but the downstream mapping silently drops or downgrades the affected content. Before you proceed to the dry-run preview, scan the spec for each pattern and surface a warning per match. The user reads the warnings and decides whether to proceed; the skill does not block on them (these are *warnings*, not validation failures).
+
+Run this scan via Bash on the resolved spec path:
+
+```bash
+SPEC="<spec-path>"
+
+# Pattern 1 — XL effort buckets to L silently in the mapper.
+grep -nE "^[[:space:]]*[Ee]ffort:[[:space:]]*XL\b" "$SPEC" || true
+
+# Pattern 2 — "## Group:" is not recognized; tasks under it become orphans.
+# The recognized heading is "## Capability:".
+grep -nE "^##[[:space:]]+Group:" "$SPEC" || true
+
+# Pattern 3 — task headings that don't match <PREFIX>-<NN>: get absorbed
+# into the previous section's body instead of becoming tasks.
+grep -nE "^###[[:space:]]+" "$SPEC" | grep -vE "^[0-9]+:###[[:space:]]+[A-Z]+-[0-9]+:" || true
+```
+
+Format any matches as one warning per match in the form `WARN <pattern> at <spec-path>:<line>: <hint>`:
+
+- **XL effort** → `WARN XL effort at <path>:<line>: XL maps to L (Large) silently. Either accept the bucket or split the task before ingestion.`
+- **`## Group:` heading** → `WARN unrecognized heading at <path>:<line>: "## Group:" is not parsed; tasks below it will be ingested as orphans (no capability container). Use "## Capability:" instead.`
+- **Malformed task heading** → `WARN malformed task ref at <path>:<line>: heading does not match \`### PREFIX-NN: Title\`; the line will be absorbed into the surrounding body and no task will be created.`
+
+If any warnings fire, surface them all and ask the user: *"Spec passed structural validation but {N} silent-failure pattern(s) detected. Proceed to dry-run preview anyway, or fix upstream first?"* The user makes the call.
+
+If no warnings fire, say nothing about the scan — silence is a feature.
 
 **If the bundled validator is unavailable** (`${CLAUDE_PLUGIN_DATA}/tech-spec-validator.js` missing, `node` not in PATH, or the copy step failed silently): report the problem once, note that the pre-check is being skipped, and continue to the project-init check. The MCP tool will still structurally validate the spec at Stage 1; the pre-check just fails slower.
 

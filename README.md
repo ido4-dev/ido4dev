@@ -12,7 +12,7 @@ ido4dev gives AI coding agents the understanding to build correctly:
 - **Multi-agent coordination** — work distribution, task locking, handoff protocols
 - **Methodology support** — Hydro (wave-based), Scrum (sprint-based), Shape Up (cycle-based). The engine is code; methodologies are profiles.
 
-11 plugin skills for stateful workflows (onboarding, sandbox lifecycle, spec ingestion), plus methodology-aware MCP ceremony prompts (`/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro`, etc.) served directly by the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. 1 agent (project-manager), 2 governance hooks. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
+7 plugin skills — 6 user-facing stateful workflows (onboarding, sandbox lifecycle, spec ingestion, governance status) plus 1 dev-only test harness — and methodology-aware MCP ceremony prompts (`/mcp__plugin_ido4dev_ido4__standup`, `/mcp__plugin_ido4dev_ido4__plan`, `/mcp__plugin_ido4dev_ido4__retro`, etc.) served directly by the [@ido4/mcp](https://www.npmjs.com/package/@ido4/mcp) server. 1 agent (project-manager, an AI-work-product auditor), and a deterministic governance hook layer: SessionStart/SessionEnd lifecycle hooks plus PreToolUse gates and PostToolUse rules producing 14 deterministic findings — no LLM anywhere in the enforcement path. For technical spec authoring, install the companion plugin `ido4specs` alongside this one.
 
 ## Installation
 
@@ -46,7 +46,8 @@ Plugin skills (stateful workflows):
 |----------|---------------|
 | **Onboarding** | `/ido4dev:onboard`, `/ido4dev:guided-demo`, `/ido4dev:sandbox-explore` |
 | **Spec Ingestion** | `/ido4dev:ingest-spec` (authoring lives upstream in `ido4specs`) |
-| **Sandbox** | `/ido4dev:sandbox` |
+| **Sandbox** | `/ido4dev:sandbox` (incl. orphan cleanup: `/ido4dev:sandbox cleanup-orphans`) |
+| **Governance Status** | `/ido4dev:status` — on-demand resume banner: compliance grade, open audit findings, recent AI-audit activity |
 
 MCP ceremony prompts (methodology-aware — adapt to Hydro/Scrum/Shape Up based on the active profile):
 
@@ -57,6 +58,24 @@ MCP ceremony prompts (methodology-aware — adapt to Hydro/Scrum/Shape Up based 
 | **Per-container** | `/mcp__plugin_ido4dev_ido4__review`, `/mcp__plugin_ido4dev_ido4__execute-task` |
 
 Ceremony commands live in the MCP server rather than the plugin so they ship with the methodology-aware prompt generators as a single source of truth. In Claude Code's autocomplete these appear in their display form as `/plugin:ido4dev:ido4:<name>` — select from autocomplete (type `/<name>` + tab, e.g. `/standup` + tab); the command resolves to the `/mcp__plugin_ido4dev_ido4__<name>` execution form listed above. Direct typing of the execution form also works.
+
+## What changed in v1.0
+
+- **Audit log now records all attempted transitions, not just committed ones.** Every non-dryRun transition attempt is persisted to `.ido4/audit-log.jsonl` with a new `executed: boolean` flag. An attempted-but-rejected transition (e.g., a BRE validation failure) is meaningful governance signal and no longer disappears from the trail. Consumers that want committed-only views filter `executed === true` — the same flag now present on every transition tool response.
+- **New MCP tools:** `get_methodology_profile` (runtime profile fetch for subagents), `get_task_comments` + `get_task_lineage` (content-quality audit surface), `list_orphan_sandboxes` + `delete_orphan_sandbox` (cleanup of sandbox projects whose repo is gone).
+- **Sandbox creation is transactional in spirit:** pre-flight validates repo, auth, and default branch before any mutation; on mid-flight failure a best-effort rollback closes/deletes everything that was created. No more orphan issues on your repo from a failed setup.
+- **The project-manager agent audits with minimum sufficient evidence** (small, prescribed tool sequences per audit pattern) and covers content quality (PR descriptions, comment trails, spec-to-task lineage) alongside state-shape checks.
+- **New `/ido4dev:status` skill** — see your governance state on demand.
+
+## Known platform constraints
+
+These are properties of Claude Code that ido4dev works around, not bugs:
+
+- **SessionStart banner not visible in terminal** (anthropics/claude-code#24425, #11120) — Claude Code injects SessionStart hook stdout into the AI's context but does not display it in the user's terminal. Plugin workaround: `/ido4dev:status` shows the banner content on demand.
+- **`CLAUDE_PLUGIN_DATA` may be empty in Bash-tool context** — the env var is set for SessionStart hook subprocesses but not always for Bash-tool invocations made by the model. Plugin workaround: skills that invoke bundled scripts derive the data directory from `~/.claude/plugins/data/` when the variable is unset.
+- **GitHub Project v2 does not cascade-delete with its repo** — Projects are repo-independent at the GitHub API level. If you delete a sandbox repo directly, the project board survives as an orphan. Plugin workaround: `/ido4dev:sandbox cleanup-orphans` finds and deletes them.
+- **Single-project scope** — ido4dev assumes one ido4 project per directory. Multi-project / org-wide governance is not supported in v1.0.
+- **Methodology switching mid-project not supported** — changing `.ido4/methodology-profile.json` from one methodology to another mid-project leaves existing tasks in invalid states. v1.0 does not provide a migration path.
 
 ## Part of the ido4 Suite
 

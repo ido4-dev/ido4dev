@@ -62,7 +62,7 @@ done
 echo ""
 echo "▸ Skills"
 
-EXPECTED_SKILLS="onboard guided-demo sandbox-explore sandbox ingest-spec pilot-test"
+EXPECTED_SKILLS="onboard guided-demo sandbox-explore sandbox ingest-spec pilot-test status"
 
 for SKILL in $EXPECTED_SKILLS; do
   SKILL_FILE="skills/$SKILL/SKILL.md"
@@ -188,8 +188,10 @@ fi
 echo ""
 echo "▸ Cross-References"
 
-# Check that skills referencing other skills use /ido4dev: prefix
-SKILL_REFS=$(grep -roh "/ido4dev:[a-z-]*" --include="*.md" . 2>/dev/null | sort -u | sed 's|/ido4dev:||')
+# Check that skills referencing other skills use /ido4dev: prefix.
+# Scoped to live surfaces — docs/ and reports/ legitimately reference
+# deleted skills when describing historical states.
+SKILL_REFS=$(grep -roh "/ido4dev:[a-z-]*" --include="*.md" skills/ commands/ agents/ hooks/ README.md CLAUDE.md 2>/dev/null | sort -u | sed 's|/ido4dev:||')
 MISSING_REFS=0
 for REF in $SKILL_REFS; do
   if [ ! -d "skills/$REF" ] && [ ! -f "commands/$REF.md" ]; then

@@ -12,13 +12,13 @@ ido4specs (companion plugin, upstream)
         │
         ▼ (hand off *-tech-spec.md)
 ido4dev (this plugin)
-  ├── Skills (6) — Stateful workflows (onboard, guided-demo, sandbox, sandbox-explore, ingest-spec) + dev tooling (pilot-test — scoped dev-only)
+  ├── Skills (7) — Stateful workflows (onboard, guided-demo, sandbox, sandbox-explore, ingest-spec, status) + dev tooling (pilot-test — scoped dev-only)
   ├── Agents (1) — project-manager (PM); Phase 4 rebuilds it as profile-aware AI-work-product auditor
   ├── Hooks (4 types) — SessionStart (MCP install + tech-spec-validator bundle + resume banner), SessionEnd (state.json persistence), PreToolUse (3 governance gates), PostToolUse (4 rule files producing 14 deterministic findings)
   └── .mcp.json       — Starts @ido4/mcp server from ${CLAUDE_PLUGIN_DATA}
 
 @ido4/mcp (npm package, installed automatically)
-  ├── Tools (57 Hydro / 56 Scrum / 53 Shape Up)
+  ├── Tools (63 Hydro / 61 Scrum / 59 Shape Up / 29 bootstrap)
   ├── Resources (9)
   └── Prompts (8 methodology-aware ceremonies) — standup, plan, board, compliance, health, retro, review, execute-task. Invoked as /mcp__plugin_ido4dev_ido4__<prompt> slash commands.
 
@@ -30,7 +30,7 @@ ido4dev (this plugin)
 
 The decomposition / authoring slice of this plugin was extracted into a standalone companion plugin, `ido4specs`, so engineers can author technical specs as an upstream step feeding into this plugin's governance flow. The production pipeline is now `ido4shape → ido4specs → ido4dev:ingest-spec → GitHub issues under the project's methodology`.
 
-**All five phases complete** — `ido4specs` is live on GitHub, npm (`@ido4/tech-spec-format@0.8.0`), and the `ido4-dev/ido4-plugins` marketplace at v0.1.0. This repo was slimmed to governance-only and released at `v0.8.0` on 2026-04-15. The `decompose` / `decompose-tasks` / `decompose-validate` skills and the three authoring agents (`code-analyzer`, `technical-spec-writer`, `spec-reviewer`) moved to `ido4specs`; `decompose-validate` was renamed to `ingest-spec` and slimmed to dry-run preview + ingest-on-approval. The only remaining closure is a user-driven live E2E smoke test of the full `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` chain in a fresh Claude Code session.
+**All five phases complete** — `ido4specs` is live on GitHub, npm (`@ido4/tech-spec-format`, currently 0.9.1), and the `ido4-dev/ido4-plugins` marketplace (currently v0.4.3 after five E2E hardening rounds in its own repo). This repo was slimmed to governance-only and released at `v0.8.0` on 2026-04-15. The `decompose` / `decompose-tasks` / `decompose-validate` skills and the three authoring agents (`code-analyzer`, `technical-spec-writer`, `spec-reviewer`) moved to `ido4specs`; `decompose-validate` was renamed to `ingest-spec` and slimmed to dry-run preview + ingest-on-approval. The only remaining closure is a user-driven live E2E smoke test of the full `/ido4specs:create-spec → ... → /ido4dev:ingest-spec` chain in a fresh Claude Code session.
 
 **Where to find the extraction record:**
 1. `~/dev-projects/ido4specs/docs/extraction-plan.md` — canonical plan for all five phases, with per-phase status and completion notes
@@ -85,7 +85,7 @@ This matches the dual-bundle pattern already used by `ido4specs` and `ido4shape`
 - `dist/.tech-spec-format-version` — semver marker of the bundled version
 - `dist/.tech-spec-format-checksum` — SHA-256 of the bundle (verified in `tests/validate-plugin.sh`)
 
-**Manual bundle refresh:** `bash scripts/update-tech-spec-validator.sh 0.8.0` (npm) or `bash scripts/update-tech-spec-validator.sh ~/dev-projects/ido4` (local build). The script fetches/copies the bundle, smoke-tests it against `references/example-technical-spec.md`, and writes the version + checksum markers.
+**Manual bundle refresh:** `bash scripts/update-tech-spec-validator.sh <version>` (npm, e.g. `0.9.1`) or `bash scripts/update-tech-spec-validator.sh ~/dev-projects/ido4` (local build). The script fetches/copies the bundle, smoke-tests it against `references/example-technical-spec.md`, and writes the version + checksum markers.
 
 **Automatic bundle refresh:** `.github/workflows/update-tech-spec-validator.yml` receives `repository_dispatch: tech-spec-format-published` from the ido4 monorepo's publish flow, opens an auto-PR with the updated bundle, and auto-merges patch/minor bumps. Major bumps open with `needs-review`. A weekly cron acts as a safety net. Requires `PAT` secret on this repo (for PR creation) and `IDO4DEV_DISPATCH_TOKEN` secret on the ido4 monorepo (for dispatch).
 

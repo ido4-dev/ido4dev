@@ -122,7 +122,7 @@ Then STOP. Do NOT initialize the project yourself — methodology choice is a us
 
 ## Stage 1: Ingestion Preview (dry-run)
 
-1. Call `ingest_spec` with `dryRun: true`, passing the technical spec file path.
+1. Call `ingest_spec` with `dryRun: true`, passing the spec's full markdown text as `specContent` — the tool takes content, not a file path; read the spec file and pass its contents.
 2. Present the preview to the user:
    - Methodology detected (from `.ido4/project-info.json`)
    - Number of issues that would be created (capabilities + tasks)
@@ -145,7 +145,7 @@ Do NOT attempt to edit the spec from within this skill. Authoring belongs to `id
 
 Only proceed if the user explicitly approved the Stage 1 preview with "yes", "proceed", or equivalent. Ambiguous responses ("looks ok, I guess") mean STOP and re-ask.
 
-1. Call `ingest_spec` with `dryRun: false`, passing the technical spec file path.
+1. Call `ingest_spec` with `dryRun: false`, passing the same `specContent` markdown used in the Stage 1 dry run.
 2. Report results:
    - Issues created (count, with URLs if available)
    - Any creation failures and their causes (GitHub API errors, rate limits, permission issues)

@@ -1,4 +1,5 @@
-// Hook state layer: read/write wrapper for ${CLAUDE_PLUGIN_DATA}/hooks/state.json.
+// Hook state layer: read/write wrapper for the project-scoped state file
+// ${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json.
 //
 // Pattern: §4.6 of ~/dev-projects/ido4-suite/docs/hook-and-rule-strategy.md
 // (simple state file over full event log). The schema is a summary, not an
@@ -22,6 +23,27 @@ const fs = require('fs');
 const path = require('path');
 
 const SCHEMA_VERSION = 1;
+
+// Project-scoped state file resolution.
+//
+// State is governance memory of ONE project; a plugin-global state.json
+// bleeds banners/compliance trajectories between projects on the same
+// machine (caught by synthetics fidelity judge, 2026-06-13). The key is the
+// project cwd slugged the same way Claude Code slugs project dirs
+// (/Users/x/proj → -Users-x-proj), so any consumer — including the PM agent
+// working from prose — can reconstruct it from `pwd` without hashing.
+//
+// Legacy ${dataDir}/hooks/state.json files are ignored, not migrated:
+// adopting global state into whichever project reads it first would claim
+// another project's history, which is the exact bug this fixes.
+function projectKey(cwd) {
+  return String(cwd || process.cwd()).replace(/[^a-zA-Z0-9._-]/g, '-');
+}
+
+function resolveStateFile(dataDir, cwd) {
+  if (!dataDir) return null;
+  return path.join(dataDir, 'hooks', 'state', `${projectKey(cwd)}.json`);
+}
 
 function emptyState() {
   return {
@@ -116,4 +138,6 @@ module.exports = {
   read,
   write,
   update,
+  projectKey,
+  resolveStateFile,
 };

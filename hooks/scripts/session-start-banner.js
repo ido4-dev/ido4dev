@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // SessionStart hook: emit a multi-block resume banner from state.json.
 //
-// Reads ${CLAUDE_PLUGIN_DATA}/hooks/state.json (written by SessionEnd last
-// time) via hooks/lib/state.js. Emits up to four blocks to stdout, picked
+// Reads the project-scoped state file (${CLAUDE_PLUGIN_DATA}/hooks/state/
+// <project-key>.json, written by SessionEnd last time) via hooks/lib/state.js. Emits up to four blocks to stdout, picked
 // up by Claude Code as additionalContext for the new session:
 //
 //   1. Resume line          — last compliance grade + open-finding count + ended_at delta
@@ -27,7 +27,7 @@ if (!dataDir) {
   process.exit(0);
 }
 
-const stateFile = path.join(dataDir, 'hooks', 'state.json');
+const stateFile = state.resolveStateFile(dataDir); // project-scoped by cwd
 if (!fs.existsSync(stateFile)) {
   process.exit(0);
 }

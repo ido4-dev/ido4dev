@@ -529,7 +529,7 @@ if (require.main === module) {
     if (fs.existsSync(cwdProfile)) args.profilePath = cwdProfile;
   }
   if (!args.stateFilePath && process.env.CLAUDE_PLUGIN_DATA) {
-    args.stateFilePath = path.join(process.env.CLAUDE_PLUGIN_DATA, 'hooks', 'state.json');
+    args.stateFilePath = state.resolveStateFile(process.env.CLAUDE_PLUGIN_DATA); // project-scoped by cwd
   }
   runFromStdin(args).catch((e) => {
     warn(`fatal — ${e.message}`);

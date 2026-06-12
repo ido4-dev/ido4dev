@@ -16,8 +16,8 @@ Run the banner script in one Bash call and relay its output. The script lives in
 ```bash
 DATA_DIR="$CLAUDE_PLUGIN_DATA"
 if [ -z "$DATA_DIR" ]; then
-  STATE=$(ls ~/.claude/plugins/data/*/hooks/state.json 2>/dev/null | head -1)
-  [ -n "$STATE" ] && DATA_DIR=$(dirname "$(dirname "$STATE")")
+  HOOKS_DIR=$(ls -d ~/.claude/plugins/data/*/hooks 2>/dev/null | head -1)
+  [ -n "$HOOKS_DIR" ] && DATA_DIR=$(dirname "$HOOKS_DIR")
 fi
 OUT=$([ -n "$DATA_DIR" ] && CLAUDE_PLUGIN_DATA="$DATA_DIR" node "${CLAUDE_SKILL_DIR}/../../hooks/scripts/session-start-banner.js" 2>/dev/null)
 echo "${OUT:-[ido4dev] No governance state yet — fresh project or no prior session activity.}"

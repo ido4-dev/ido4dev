@@ -101,7 +101,7 @@ node hooks/lib/rule-runner.js --rules <path> [--profile <path>] [--state <path>]
 
 Defaults:
 - `--profile` — `${cwd}/.ido4/methodology-profile.json` if it exists, else null (no filter)
-- `--state` — `${CLAUDE_PLUGIN_DATA}/hooks/state.json` if that env var is set
+- `--state` — `${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json` if that env var is set (project-scoped; key = cwd slugged via `state.projectKey()`)
 
 Hook entries in `hooks.json` invoke it as:
 
@@ -257,7 +257,9 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
 
 ## State layer
 
-**File:** `hooks/lib/state.js` (read/write wrapper) + `${CLAUDE_PLUGIN_DATA}/hooks/state.json` (on-disk schema).
+**File:** `hooks/lib/state.js` (read/write wrapper) + `${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json` (on-disk schema).
+
+**Project scoping (2026-06-13):** state is governance memory of ONE project. The file is keyed by the project's working directory, slugged Claude Code-style (`/Users/x/proj` → `-Users-x-proj`, via `state.projectKey()` / `state.resolveStateFile()`). All three consumers (rule-runner default, SessionStart banner, SessionEnd persistence) resolve through the same helper from the hook subprocess's cwd. Before this, a single plugin-global `state.json` bled banners and compliance trajectories between projects on the same machine — caught by the synthetics fidelity judge. Legacy global `hooks/state.json` files are ignored, not migrated (adopting global state into whichever project reads it first would claim another project's history).
 
 ### Schema
 

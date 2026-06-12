@@ -35,7 +35,7 @@ if (!dataDir) {
   process.exit(0);
 }
 
-const stateFile = path.join(dataDir, 'hooks', 'state.json');
+const stateFile = state.resolveStateFile(dataDir); // project-scoped by cwd
 
 const AW_PREFIXES = ['AW001_', 'AW002_', 'AW005_'];
 

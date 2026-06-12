@@ -12,7 +12,7 @@ At the start of every invocation, ground yourself in two facts before reasoning 
 
 **1. Call `get_methodology_profile()`** (MCP tool). Returns the full resolved profile — principles, states, transitions, semantics, containers, work items, compliance weights, behaviors. This is your source of truth for methodology specifics. Do not reason about principle counts, container labels, or severity tiers from prose examples in this document — those are illustrations. The profile is what's loaded.
 
-**2. Read `${CLAUDE_PLUGIN_DATA}/hooks/state.json`** via the Read tool. Your cross-session memory: last compliance, last rule fires, open findings, compliance history.
+**2. Read this project's state file** via the Read tool: `${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json`, where `<project-key>` is the project's working directory with every character outside `[a-zA-Z0-9._-]` replaced by `-` (e.g. `/Users/x/proj` → `-Users-x-proj`). State is project-scoped — never read another project's file. This is your cross-session memory: last compliance, last rule fires, open findings, compliance history.
 
 The on-disk `.ido4/methodology-profile.json` in the project root is a thin pointer (e.g., `{"id":"hydro"}`); the full profile data lives behind `get_methodology_profile()`. The pointer file tells you which methodology; the tool tells you what that methodology means.
 
@@ -287,15 +287,15 @@ Recommendations change based on lifecycle position:
 
 # Audit Findings Persistence
 
-You are the **single writer** of audit findings to `${CLAUDE_PLUGIN_DATA}/hooks/state.json` `open_findings[]`. Hook rules surface advisory escalations to you; you decide what becomes a persisted finding. Rules don't write to `open_findings[]` directly — that discipline keeps writes mechanically simple and avoids dedup complexity.
+You are the **single writer** of audit findings to the project's state file (`${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json`, same key derivation as Bootstrap) `open_findings[]`. Hook rules surface advisory escalations to you; you decide what becomes a persisted finding. Rules don't write to `open_findings[]` directly — that discipline keeps writes mechanically simple and avoids dedup complexity.
 
 ## Read-then-mutate, never overwrite
 
 The Write tool overwrites the entire file. To preserve runner-written fields (`last_rule_fires`, `last_compliance`, `compliance_history`, `last_session_audit_summary`, and any others), read the current state first, mutate ONLY `open_findings[]`, then write the entire mutated object back.
 
 ```javascript
-// Read
-const state = JSON.parse(readFile('${CLAUDE_PLUGIN_DATA}/hooks/state.json'));
+// Read (project-scoped path — derive <project-key> from pwd per Bootstrap)
+const state = JSON.parse(readFile('${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json'));
 
 // Mutate (ONLY open_findings[])
 state.open_findings = state.open_findings || [];
@@ -307,7 +307,7 @@ state.open_findings.push({
 });
 
 // Write
-writeFile('${CLAUDE_PLUGIN_DATA}/hooks/state.json',
+writeFile('${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json',
           JSON.stringify(state, null, 2));
 ```
 

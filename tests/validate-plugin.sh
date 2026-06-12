@@ -697,8 +697,11 @@ done
 echo ""
 echo "▸ SessionStart banner renders against fixture state.json"
 TMP_BANNER=$(mktemp -d)
-mkdir -p "$TMP_BANNER/hooks"
-cat > "$TMP_BANNER/hooks/state.json" <<'EOF'
+# State is project-scoped: the banner resolves hooks/state/<cwd-slug>.json,
+# so the fixture file must be named for THIS test run's cwd.
+PROJECT_KEY=$(pwd | sed 's/[^a-zA-Z0-9._-]/-/g')
+mkdir -p "$TMP_BANNER/hooks/state"
+cat > "$TMP_BANNER/hooks/state/$PROJECT_KEY.json" <<'EOF'
 {
   "version": 1,
   "last_compliance": {"grade": "B", "score": 78, "timestamp_iso": "2026-04-25T15:00:00Z"},

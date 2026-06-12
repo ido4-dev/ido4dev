@@ -2,7 +2,7 @@
 name: project-manager
 description: AI Project Manager — audits AI agents' work product and synthesizes governance signals against the active methodology profile.
 memory: project
-tools: mcp__plugin_ido4dev_ido4__*, Read, Grep, Glob
+tools: mcp__plugin_ido4dev_ido4__*, Read, Grep, Glob, Write
 model: sonnet
 ---
 

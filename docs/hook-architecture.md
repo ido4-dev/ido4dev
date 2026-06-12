@@ -291,7 +291,8 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
     {
       "id": "audit:<category>:<actor_id>:<scope>",
       "source": "pm-agent",
-      "category": "bypass_pattern" | "ghost_closure" | "rubber_stamp" | "suitability_drift" | "actor_fragmentation",
+      "category": "bypass_pattern" | "ghost_closure" | "rubber_stamp" | "suitability_drift" | "actor_fragmentation"
+                  | "shallow_pr" | "silent_closure" | "spec_orphan",   // last three: Tier B (Phase 5 Stage 4)
       "title": "<short headline shown in SessionStart banner>",
       "summary": "<1-3 sentence body>",
       "actor_type": "ai-agent",
@@ -493,7 +494,7 @@ The boundary is the Claude Code session: content the agent reads is scoped to wh
 
 ## Current rule inventory
 
-As of Stage 7 (2026-04-24):
+As of Phase 5 Stage 5 (2026-06-12):
 
 | File | Event | Matcher | Rules | Purpose |
 |---|---|---|---|---|
@@ -501,6 +502,7 @@ As of Stage 7 (2026-04-24):
 | `compliance-score.rules.yaml` | PostToolUse | `mcp__plugin_ido4dev_ido4__compute_compliance_score` | CS001 (+escalate_to), CS002 | Grade drop + category threshold crossing. Stateful. |
 | `complete-and-handoff.rules.yaml` | PostToolUse | `mcp__plugin_ido4dev_ido4__complete_and_handoff` | CH001, CH002 | Cascade unblock + strong-next-task recommendation |
 | `assign-task.rules.yaml` | PostToolUse | `^mcp__plugin_ido4dev_ido4__assign_task_to_(wave\|sprint\|cycle)$` | AT001 | Integrity violation + persist `last_assignments` |
+| `ai-work-audit.rules.yaml` | PostToolUse | `^mcp__plugin_ido4dev_ido4__(refine\|...\|plan)_task$` (all transition tools) | AW001 (+escalate_to), AW002 (+escalate_to), AW005 (+escalate_to) | AI-closure audit advisory + AI BRE-bypass + AI-suitability violation (Phase 4 Stage 2) |
 | `pre-transition.rules.yaml` | PreToolUse | `^mcp__plugin_ido4dev_ido4__(refine\|...\|return)_task$` | G1, G3 | skipValidation bypass + approve-when-compliance-low |
 | `pre-assign-task.rules.yaml` | PreToolUse | `^mcp__plugin_ido4dev_ido4__assign_task_to_(wave\|sprint\|cycle)$` | G5 | Re-assignment warning |
 

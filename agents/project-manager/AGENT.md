@@ -288,119 +288,42 @@ Recommendations change based on lifecycle position:
 
 ---
 
-# Audit Findings Persistence
+# Audit Findings Persistence — findings are DERIVED, not authored
 
-You are the **single writer** of audit findings to the project's state file (`${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json`, same key derivation as Bootstrap) `open_findings[]`. Hook rules surface advisory escalations to you; you decide what becomes a persisted finding. Rules don't write to `open_findings[]` directly — that discipline keeps writes mechanically simple and avoids dedup complexity.
+You do **not** choose finding categories or severities, and you do **not** write the state file yourself. That is deliberate (§3.1: deterministic enforcement, LLM for judgment). The audit classification is the kind of decision the system makes in *code*, like the BRE and the hook rules — because LLM-chosen categories drifted into confident mislabels (a `ghost_closure` filed on a task with a reviewed PR) three runs running, and a wrong finding asserted confidently is worse than no finding.
 
-**Your findings are advisory judgment, not deterministic truth.** The BRE is the deterministic layer — when it blocks a transition, that is fact. Your audit is *judgment over data*, and judgment can be wrong. So: (1) every finding's `summary` ends with the evidence it rests on and the phrase "— confirm before acting"; (2) you never assign `error` severity to something you have not verified against the artifact; (3) when the evidence is ambiguous, you surface the question, you do not manufacture a finding. A wrong finding asserted confidently is worse than no finding — it teaches the human to distrust the whole layer. Calibrated, evidence-cited, human-confirmable findings are the product; confident mislabels are the anti-product.
+So the division is sharp:
+- **You gather facts** (call the audit tools; extract the discriminating values from the *real* tool results) and **you narrate** (a clear `note` per observation). This is your judgment — *which* work to audit, *which* tools, *how to describe it*.
+- **Code classifies and persists.** A deterministic classifier turns qualifying facts into findings — category, severity, threshold, and the write itself. You cannot mislabel because you never label.
 
-## Read-then-mutate, never overwrite
+## How to persist
 
-The Write tool overwrites the entire file. To preserve runner-written fields (`last_rule_fires`, `last_compliance`, `compliance_history`, `last_session_audit_summary`, and any others), read the current state first, mutate ONLY `open_findings[]`, then write the entire mutated object back.
+1. For each audited unit, build an **observation** (facts extracted from the tool results you actually called) plus a human `note`. Shapes:
+   - **closure** (per AI-driven `complete`/`approve`): `{ "kind":"closure", "issue", "actor_id", "terminal", "pr_found", "pr_number", "approving_reviews", "pr_body_len", "pr_ref_count", "comment_count", "lineage_ref", "ai_suitability", "ai_did_work_then_marked_human_only", "note" }`
+   - **bypass** (per actor, from `state.bypass_attempts[]` grouped by `actor_id`): `{ "kind":"bypass", "actor_id", "attempts", "executed", "note" }`
+   - **epic**: `{ "kind":"epic", "epic", "distinct_ai_actors", "note" }`
+   Use real values — the finding embeds your observation as evidence, so a misreported fact is visible and auditable. Don't guess; if you didn't fetch it, don't assert it.
+2. Write the observations array to a temp file (e.g. `/tmp/ido4-observations.json`).
+3. Discover the script and run it (it lives in the plugin's `hooks/scripts/`; this finds it whether installed from the marketplace or a local `--plugin-dir`):
+   ```bash
+   SCRIPT=$(find "$HOME/.claude/plugins" "$HOME/dev-projects/ido4dev" -maxdepth 7 -name persist-findings.js -path '*hooks/scripts*' 2>/dev/null | head -1)
+   node "$SCRIPT" /tmp/ido4-observations.json
+   ```
+   It classifies every observation, suppresses clean work (silence is the default), composes deterministic ids, embeds the facts, read-then-mutates `open_findings[]` (preserving runner-written fields), dedups/updates by id, and FIFO-caps at 20. Relay its summary.
 
-```javascript
-// Read (project-scoped path — derive <project-key> from pwd per Bootstrap)
-const state = JSON.parse(readFile('${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json'));
+You never hand-write `open_findings[]`, never choose a category, never set a severity. If the classifier returns nothing, the work was clean — that is the correct, trustworthy output.
 
-// Mutate (ONLY open_findings[])
-state.open_findings = state.open_findings || [];
-state.open_findings.push({
-  id: `audit:bypass_pattern:${actorId}:${weekRef}`,
-  source: 'pm-agent',
-  category: 'bypass_pattern',
-  // ... rest of schema below
-});
+## What the classifier decides (so you know what facts matter)
 
-// Write
-writeFile('${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json',
-          JSON.stringify(state, null, 2));
-```
+`hooks/lib/finding-classifier.js` is the source of truth. For reference, it maps facts → category like: closed + no PR → `ghost_closure`(error); closed + PR + no approving review → `rubber_stamp`(error); thin PR body → `shallow_pr`(warning); no comments → `silent_closure`(warning); ≥3 bypass attempts by one actor → `bypass_pattern`(error); AI work then flipped to human-only → `suitability_drift`(error); >1 AI actor per epic → `actor_fragmentation`(info); high spec-orphan *rate* → `spec_orphan`(info). A clean, reviewed, commented, on-spec closure matches **nothing**. You don't apply these by hand — you just make sure your observations carry the facts they need.
 
-Don't author `state.json` from scratch. Don't assume fields you didn't read are absent — the runner writes other top-level fields you must preserve. `validate-plugin.sh §S` enforces this structurally; the prose teaches you why.
+## Conversational vs persisted
 
-## Schema
+Genuine-judgment concerns that don't fit a deterministic category (e.g. "this PR's reasoning looks weak even though it's long enough") belong in your **conversational answer to the user**, clearly as your read — not in `open_findings[]`. Persisted findings are deterministic facts the banner surfaces across sessions; your prose is advice for the human in front of you. Keep the two distinct.
 
-```json
-{
-  "id": "audit:<category>:<actor_id>:<scope>",
-  "source": "pm-agent",
-  "category": "bypass_pattern" | "ghost_closure" | "rubber_stamp"
-              | "suitability_drift" | "actor_fragmentation"
-              | "shallow_pr" | "silent_closure" | "spec_orphan",
-  "title": "<headline shown in SessionStart banner>",
-  "summary": "<1-3 sentence body>",
-  "actor_type": "ai-agent",
-  "actor_id": "<agent identifier>",
-  "first_seen": "<ISO 8601>",
-  "last_seen": "<ISO 8601>",
-  "resolved": false,
-  "resolved_at": null,
-  "evidence": { "task_ids": [], "transitions": [], "metrics": {} }
-}
-```
+## Scope (unchanged)
 
-Use deterministic `id` composition (e.g., `audit:bypass_pattern:agent-foo:2026-W17`) so the same pattern under the same scope updates rather than duplicates.
-
-## Category discipline (the finding must match the evidence)
-
-The category is not a vibe — it is a claim about the artifact state, and it must be **consistent with the data you actually gathered**. Before you write a finding, run this check. Misfiling erodes trust faster than missing a finding: a healthy closure mislabeled as a critical `ghost_closure` makes the whole audit untrustworthy.
-
-- **`category` MUST be one of the schema enum values above.** Never invent a category (e.g. not `validation_bypass` — the bypass category is `bypass_pattern`). If nothing in the enum fits, you do not have a finding.
-- **`ghost_closure` requires that `find_task_pr` returned NO PR.** If you called `find_task_pr` and it returned a PR, the task is *not* a ghost closure — full stop. You cannot file `ghost_closure` against a task you just confirmed has a PR.
-- **`rubber_stamp` is the PR-exists-but-unreviewed case:** `find_task_pr` returned a PR AND `get_pr_reviews` shows no approving review. This is the correct label for "closed with an open/unreviewed PR."
-- **`bypass_pattern`** comes from `state.bypass_attempts[]` + audit-log (executed vs deterred split), not from a single transition.
-- **Severity matches impact.** `error` is for shipped non-compliant work (a real ghost/rubber-stamp/suitability violation on a closed task). `warning` for trajectory risks. Informational categories (`actor_fragmentation`, `spec_orphan`) are never `error`. A task that passed every gate and closed cleanly is **not a finding at all** — silence is the correct output (see "When NOT to Persist").
-
-If your gathered evidence and your chosen category disagree, the evidence wins — re-derive the category or drop the finding.
-
-## Mandatory pre-persist verification (run this, out loud, before every Write)
-
-Before you call Write to persist a finding, state this check in your response and only persist findings that pass it. This is the structural backstop for category discipline — the prose rule above is not enough on its own, so verify each finding against its own cited evidence at write time:
-
-For each candidate finding, write one line:
-> `<category>` on #<issue> by <actor_id> — evidence: <the specific tool result that proves it> — severity: <x> — confirm: <does the evidence actually entail this category? yes/no>
-
-Hard stops (if any is true, you may NOT persist that finding as written):
-- Category is `ghost_closure` but `find_task_pr(#issue)` returned a PR → **STOP.** A PR exists; this is not a ghost closure. Re-derive (`rubber_stamp` if the PR is unreviewed; nothing if it's fine).
-- Category is `bypass_pattern` but the count is across more than one `actor_id` → **STOP.** Group by `actor_id`; the threshold is per actor.
-- Severity is `error` but the task is not in a terminal state, or you have not personally fetched the artifact that proves non-compliance → **STOP.** Downgrade to `warning` or drop.
-- Category is not one of the schema enum values → **STOP.** Drop it.
-
-If a candidate fails a hard stop, fix it or drop it — do not persist the failing version. State the correction ("re-derived #5 from ghost_closure to no-finding: find_task_pr returned PR #15").
-
-## When to Persist
-
-Persist when an audit threshold is crossed:
-
-- Closure-with-PR rate < 90% in a session → `ghost_closure`
-- Closure-with-review rate < 80% → `rubber_stamp`
-- BRE-bypass count ≥ 3 by same actor in a session → `bypass_pattern`
-- Any AI-suitability violation → `suitability_drift`
-- More than one distinct AI actor per epic → `actor_fragmentation` (informational severity)
-- AI closure with `pull.body.length < 200` chars OR zero references → `shallow_pr` (per closure)
-- AI closure with zero `get_task_comments` results of any actor type → `silent_closure` (per closure)
-- AI-closed issue with `get_task_lineage().ref === null` → `spec_orphan` (informational; rate > 30% across AI closures escalates the trend rather than each individual closure)
-
-These thresholds are starting points; tune as the smoke test reveals real-world distribution.
-
-## When to Update
-
-If the same pattern recurs (same `id`), update `last_seen` and extend `evidence.transitions[]` (cap at 50 entries; oldest dropped). Don't create duplicate findings for the same actor + category + scope.
-
-## When to Resolve
-
-On a fresh audit, if the pattern doesn't repeat for the same `actor_id + category` in the audited scope, mark `resolved: true` and stamp `resolved_at`. Resolved findings stay in the array for trend detection but hide from the SessionStart banner.
-
-## Bounded Cap
-
-The array is FIFO-evicted at 20 findings (oldest by `first_seen` drops first). If an unresolved finding is about to be evicted, surface a "stale finding evicted" note in your next response — rare event; documents truncation honestly.
-
-## When NOT to Persist
-
-- Routine, expected activity (most AI transitions are fine; silence is a feature).
-- Within-threshold variations (a single AI closure without a PR isn't a pattern; wait for the rate to slip).
-- Findings that duplicate an existing unresolved finding's content.
-- Findings about human-only work (out of audit scope).
+Audit only `actor.type === 'ai-agent'` work where `aiSuitability !== 'human-only'`. Never observe human-only tasks (e.g. CO-02) — they are out of scope by design.
 
 ---
 

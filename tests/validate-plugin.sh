@@ -744,63 +744,44 @@ else
   warn "node not available — banner fixture render skipped"
 fi
 
-# ─── S. Read-then-mutate discipline in PM agent prose (Phase 5 F2) ───
+# ─── S. Derived-finding mechanism (A2-structural) ───
 #
-# The PM agent is the single writer of state.json open_findings[]. The Write
-# tool overwrites the entire file, so the discipline is "read first, mutate
-# ONLY open_findings, write the whole object back" — otherwise runner-written
-# fields (last_rule_fires, last_compliance, compliance_history,
-# last_session_audit_summary) are silently blasted.
-#
-# AGENT.md teaches this discipline in prose with a code-shaped example. This
-# check verifies the prose is present and coherent. Structural enforcement of
-# the agent's own write behavior isn't viable (the agent has Write access and
-# is an LLM, not a deterministic process), so the prose-grep guards against
-# doc drift — someone removing the section without realizing what it does.
-#
-# Phase 5 F2 fix per docs/phase-5-brief.md §4.2.
+# Audit findings are DERIVED, not authored: the LLM gathers facts + narrates;
+# a deterministic classifier computes category/severity and persists. This
+# replaces the prose category-discipline that drifted into confident mislabels
+# 3 runs running (synthetic-001 P8 → 002 A2 → 003 A2-insufficient). The
+# structural guarantee: the agent never chooses a category, so it cannot
+# mislabel. Guard the mechanism (modules present) + the AGENT.md contract.
 
 echo ""
-echo "▸ Read-then-mutate discipline present in PM AGENT.md (Phase 5 F2)"
+echo "▸ Derived-finding mechanism present (A2-structural)"
 AGENT_MD="$PLUGIN_ROOT/agents/project-manager/AGENT.md"
-RTM_BAD=0
+DERIVE_BAD=0
 
-if [ ! -f "$AGENT_MD" ]; then
-  fail "PM AGENT.md not found at $AGENT_MD"
-  RTM_BAD=$((RTM_BAD + 1))
-else
-  grep -q "Read-then-mutate" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing 'Read-then-mutate' section header (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
-  grep -q "preserve runner-written fields" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing 'preserve runner-written fields' rationale (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
-  grep -q "JSON.parse(readFile" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing read-then-mutate code-shaped example (Phase 5 F2 prose)"; RTM_BAD=$((RTM_BAD + 1)); }
+# The deterministic classifier + persist path must exist.
+[ -f "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" ] \
+  || { fail "hooks/lib/finding-classifier.js missing (deterministic classifier)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+[ -f "$PLUGIN_ROOT/hooks/scripts/persist-findings.js" ] \
+  || { fail "hooks/scripts/persist-findings.js missing (deterministic persist path)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+# The classifier must encode the structural guarantee (a PR present can't be ghost).
+if [ -f "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" ]; then
+  grep -q "ghost_closure" "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" \
+    && grep -q "rubber_stamp" "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" \
+    || { fail "finding-classifier.js missing core categories"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
 fi
-
-[ "$RTM_BAD" = "0" ] && pass "PM AGENT.md teaches read-then-mutate (header + rationale + code example)"
-
-# ─── S2. Category discipline in PM AGENT.md (synthetic-001 P8) ───
-#
-# P8 reproduction (synthetic-001): the audit mislabeled a healthy PR-backed
-# closure as error-severity ghost_closure and invented an out-of-enum
-# 'validation_bypass' category. Guard the prose that ties category to evidence.
-echo ""
-echo "▸ Category discipline present in PM AGENT.md (synthetic-001 P8)"
-CAT_BAD=0
+# AGENT.md must teach derive-not-author + point at the persist script.
 if [ -f "$AGENT_MD" ]; then
-  grep -q "Category discipline" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing 'Category discipline' section header (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
-  grep -q "ghost_closure\` requires that \`find_task_pr\` returned NO PR" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing ghost_closure-requires-no-PR rule (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
-  grep -q "MUST be one of the schema enum" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing enum-only category constraint (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
-  # A2: mandatory pre-persist verification ritual + advisory framing
-  grep -q "Mandatory pre-persist verification" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing mandatory pre-persist verification ritual (A2)"; CAT_BAD=$((CAT_BAD + 1)); }
-  grep -q "advisory judgment, not deterministic truth" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing advisory-framing of findings (A2)"; CAT_BAD=$((CAT_BAD + 1)); }
+  grep -q "DERIVED, not authored" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing 'findings are DERIVED, not authored' contract (A2-structural)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  grep -q "persist-findings.js" "$AGENT_MD" \
+    || { fail "PM AGENT.md doesn't point at persist-findings.js (the deterministic write path)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  grep -q "never choose a category" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing the never-choose-a-category guarantee"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+else
+  fail "PM AGENT.md not found at $AGENT_MD"; DERIVE_BAD=$((DERIVE_BAD + 1))
 fi
-[ "$CAT_BAD" = "0" ] && pass "PM AGENT.md enforces category discipline + pre-persist verification + advisory framing"
+
+[ "$DERIVE_BAD" = "0" ] && pass "Findings are derived deterministically (classifier + persist path + AGENT.md contract)"
 
 # ─── T. Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02) ───
 #

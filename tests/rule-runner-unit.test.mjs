@@ -740,7 +740,8 @@ check('skipValidation attempt is recorded to bypass_attempts with issue/tool/act
   const attempts = res.stateMutations.bypass_attempts;
   assertTrue(Array.isArray(attempts) && attempts.length === 1, 'one attempt recorded');
   assertEq(attempts[0].issue, 42, 'issue captured');
-  assertEq(attempts[0].actor_type, 'ai-agent', 'actor captured');
+  assertEq(attempts[0].actor_type, 'ai-agent', 'actor type captured');
+  assertTrue(typeof attempts[0].actor_id === 'string' && attempts[0].actor_id.length > 0, 'actor_id captured (per-agent attribution)');
   assertEq(attempts[0].gated_by, 'G1_skip_validation_bypass', 'gate captured');
   assertTrue(typeof attempts[0].at === 'string', 'timestamp captured');
 });

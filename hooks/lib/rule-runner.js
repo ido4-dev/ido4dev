@@ -313,6 +313,11 @@ function evaluate({ ruleFile, event, profile, profileValues, state: currentState
     event: event || {},
     now_ms: nowMs,
     now_iso: new Date(nowMs).toISOString(),
+    // The acting agent's identity, inherited from the session env the engine
+    // also reads (IDO4_AGENT_ID → createMcpActor). Lets rules attribute
+    // recorded events (e.g. bypass_attempts) to the specific agent rather than
+    // a generic 'ai-agent', so a multi-agent audit can tell who did what.
+    actor_id: (typeof process !== 'undefined' && process.env && process.env.IDO4_AGENT_ID) || 'mcp-session',
   };
 
   const hitPolicy = ruleFile.hit_policy || DEFAULT_HIT_POLICY;

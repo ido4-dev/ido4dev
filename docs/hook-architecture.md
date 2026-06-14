@@ -284,8 +284,9 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
     {                           //   every skipValidation attempt, recorded AT THE GATE (PreToolUse),
       "issue": 0,               //   so deterred attempts (which never reach the engine/audit-log) are
       "tool": "<tool_name>",    //   still remembered. Bounded 50, newest-first, cross-session.
-      "actor_type": "ai-agent", //   The PM audit reads this for bypass-pattern detection; an executed
-      "at": "<ISO>",            //   bypass also appears in audit-log + fires AW002 (complementary).
+      "actor_type": "ai-agent", //   actor_id (from IDO4_AGENT_ID) attributes the attempt to the
+      "actor_id": "<agent-id>", //   specific agent — the PM audit groups bypass_pattern BY actor_id.
+      "at": "<ISO>",            //   An executed bypass also appears in audit-log + fires AW002.
       "gated_by": "G1_skip_validation_bypass"
     }
   ],

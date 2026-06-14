@@ -165,9 +165,9 @@ Stop there. Don't query `audit_trail` for context the AW001 advisory already sur
 
 Hook surfaced an AW002 advisory: AI actor *executed* a bypass. But bypass behavior also includes *deterred* attempts that never reach the audit log (see Audit Source Hierarchy). Count both:
 
-1. Read `state.bypass_attempts[]` (already in hand from Bootstrap) — these are the gate-recorded attempts (executed or deterred).
+1. Read `state.bypass_attempts[]` (already in hand from Bootstrap) — these are the gate-recorded attempts (executed or deterred). **Each entry carries `actor_id`; group the count BY `actor_id`.** Do not attribute one agent's attempts to another — the threshold is per-actor, and the `id` is in the record.
 2. AT MOST ONE `query_audit_trail({actorType: 'ai-agent', since: <session-start>})` — confirm which of those attempts also *executed* (appear with `executed: true`).
-3. Persist a `bypass_pattern` finding at threshold (≥3 bypass attempts — executed or deterred — in the audited scope). State the split explicitly in the finding: "N attempts, M executed, K deterred by G1." A pattern of *deterred* attempts is still a finding — it means the actor repeatedly reaches for the bypass.
+3. Persist a `bypass_pattern` finding per actor at threshold (≥3 bypass attempts by the SAME `actor_id` — executed or deterred). The finding's `actor_id` MUST be the one from `bypass_attempts[].actor_id`. State the split explicitly: "agent X: N attempts, M executed, K deterred by G1." A pattern of *deterred* attempts is still a finding — it means the actor repeatedly reaches for the bypass.
 
 ## AW005 follow-up (AI suitability violation)
 

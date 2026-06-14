@@ -87,6 +87,7 @@ post_evaluation:
               issue: (tool_input.issueNumber !== undefined ? tool_input.issueNumber : null),
               tool: event.tool_name,
               actor_type: 'ai-agent',
+              actor_id: actor_id,
               at: now_iso,
               gated_by: 'G1_skip_validation_bypass'
             },

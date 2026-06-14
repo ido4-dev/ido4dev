@@ -66,6 +66,19 @@ Equally important, the judges correctly attributed the *headline deterministic f
 
 ---
 
+## 3a. P1 investigation outcome (2026-06-14)
+
+**Confirmed real, root-caused, and already on the engine roadmap.** Two Hydro-hardcodings, both methodology-agnostic in intent but Hydro in implementation:
+
+1. **`packages/core/src/shared/sanitizer/input-sanitizer.ts:174` — `validateContainerFormat` hardcodes the `wave-NNN-description` pattern** for every container name, with the literal error *"Wave name must match format wave-NNN-description."* It rejected the Scrum agent's `Sprint 1` (valid per the Scrum profile's `namePattern: '^Sprint \\d+$'`) and forced `wave-001-email-delivery`. Called from `container-service.ts:88,108` (createContainer, assignTaskToContainer). **This is the blocking issue** — a Scrum/Shape Up team cannot name their execution container correctly.
+2. **`analytics-service.ts:29` — `ContainerAnalytics.waveName`** field is Hydro-named, so all methodologies' analytics speak Hydro.
+
+**Roadmap coverage:** the engine's own `methodology-runner/` plan already scopes both — the `waveName → containerName` field rename is **Phase 0** (`phase-0-rename.md:81`, partially landed; this field is a straggler), and making `validateContainerFormat` read the profile's `namePattern` is explicitly **Phase 3** (`phase-1-profiles.md:589`: "Replace CONTAINER_FORMAT_PATTERN with container namePattern from profile").
+
+**Recommendation:** per §6 #16 (coordinate with the engine roadmap, don't patch out-of-band), pull the **minimal Phase-3 slice** — profile-driven `validateContainerFormat` — forward as a pre-pilot engine fix. The Scrum profile already carries the correct `namePattern`; the change is threading it into the sanitizer (~contained, but touches the sanitizer signature + 2 call sites + profile plumbing). Gate Scrum/Shape Up pilot marketing on it. The `waveName` field rename can ride the engine's normal Phase-0 completion.
+
+---
+
 ## 4. Recommended next actions
 
 **Harness (fast, unblocks a clean re-run):** H1 realpath, H3 wider allowlists (or skip-permissions for agent beats), H4 re-scoped assertions, H2 persistence path, H5. ~½ day. Then re-run to get a clean baseline where the memory loop actually closes.

@@ -80,7 +80,7 @@ ido4's deterministic gates + immutable audit log + methodology enforcement is pr
 |---|---|---|
 | Agents follow methodology gates deterministically | **Delivers** (BRE, validated) | — |
 | Catch process violations at machine speed | **Delivers** for prevention; audit/advisory layer unreliable | Correctness (P7/P8/P9) |
-| One engineer, **multiple distinct agents** | **Cannot represent** — all MCP work collapses to one `mcp-session` identity | **Foundational capability** (P5, now elevated) |
+| One engineer, **multiple distinct agents** | **Supported, under-documented** — the engine resolves actor identity from `IDO4_AGENT_ID` and the audit store filters/groups by `actor.id`; the synthetic only collapsed them because the harness didn't set the var (P5, downgraded from foundational on investigation) | Config/UX/docs, not a rebuild |
 | Trustworthy leadership view / hybrid metrics | Raw metrics exist; not reliable, not surfaced as an instrument panel | Capability + correctness |
 | Methodology equality (Scrum/Shape Up = Hydro) | **Leaks Hydro** into Scrum (wave-NNN naming) | Correctness, pilot-blocking (P1) |
 | Definition of Done actually enforced on closure | Rubber-stamp closures allowed (open/unreviewed PR → Done) | Correctness (P2) |
@@ -99,7 +99,7 @@ The bug set from the synthetic run. Highest priority because a system that *misr
 - **P8** PM audit mis-categorization (the audit's output isn't trustworthy).
 
 **Altitude 2 — Capability (make the meaning real). Pilot-shaping.**
-- **Multi-agent identity (P5, elevated by this thesis).** Without distinct agent identities, the product cannot represent "one engineer, N agents" — the core scenario. This is now a pre-pilot question, not a deferred one. Needs an honest feasibility pass (engine actor model).
+- **Multi-agent identity (P5 — feasibility pass complete, 2026-06-14).** The engine *already* supports distinct agent identities: `createMcpActor()` resolves `IDO4_AGENT_ID` (env) → per-agent `actor.id`, and the audit store filters/groups by `actor.id` (per-actor audit, compliance, work distribution, and `actor_fragmentation` all key off it). So "one engineer, N agents" is representable today — each agent session launches with a distinct `IDO4_AGENT_ID` (e.g., `IDO4_AGENT_ID=backend claude` in one terminal, `IDO4_AGENT_ID=frontend claude` in another). The gap is **not foundational** — it is (a) documentation (no published pattern for setting it per-agent-session), and (b) ergonomics (the `.mcp.json` doesn't surface it; a `/ido4dev:agent <id>` helper or per-worktree config would make it discoverable). **Verdict: not a pre-pilot blocker.** Single-agent-per-engineer and per-human attribution work out of the box; the N-agents-per-engineer case works today with a documented env-var pattern, and earns an ergonomic UX as a fast-follow. The synthetic harness collapsed identities only because it didn't set the var — a harness fix (set `IDO4_AGENT_ID` per agent beat) demonstrates the real behavior.
 - **The hybrid-metrics instrument panel** ("DORA for hybrid teams"). Make the Tier A/B metrics reliable, then surface them as a legible leadership view (a `/ido4dev` report or ceremony output shaped like a metrics dashboard, not prose).
 
 **Altitude 3 — Positioning & fit (make it adoptable in big orgs). Pre-aggressive-marketing.**

@@ -92,6 +92,23 @@ Equally important, the judges correctly attributed the *headline deterministic f
 
 ---
 
+## 4a. Run 2 — clean re-run after harness fixes (2026-06-14)
+
+`runs/t3-scrum-org-2026-06-14T08-03-52/`. Harness fixes H1–H5 landed. **Deterministic: 11/11.** The institutional-memory loop closed end-to-end: Sprint-0 seed reached the sessions, the banner round-trip carried real governance memory, the PM agent **persisted 2 findings to `open_findings[]`**, CO-02 stayed out of scope, and both planted incidents were **prevented by the gates** (beta wouldn't fabricate a PR; alpha declined the instructed skipValidation). The harness is validated.
+
+With the artifacts gone, the judges saw the audit/advisory layer clearly and converged on a sharper verdict: **"Adopt the deterministic core; treat the advisory/audit/banner layer as beta."** New product findings, all about that layer:
+
+| ID | Sev | Finding | Where |
+|----|-----|---------|-------|
+| **P7** | High | **Deterred bypasses leave zero audit trace.** G1 blocks `skipValidation` *before* it executes, so the attempt never reaches the audit log or `last_rule_fires`. The Day-3 audit reported "no skipValidation used" when there were **two** attempts. Prevention is good; *not remembering the attempt* undercuts the §3.9 institutional-memory thesis — "agent tried to bypass twice" is exactly the signal to keep. | engine/hooks: record deterred-attempt events |
+| **P8** | High | **PM audit mis-categorized findings.** It persisted an `error`-severity `ghost_closure` on #5 (ND-01) — the *healthy* PR-backed task (correct label would be `rubber_stamp`) — and used an out-of-enum `validation_bypass` category, while missing the real ND-02 bypass (see P7). The audit's *output* isn't trustworthy for prioritization yet. | agent prose: tighten category discipline + grounding |
+| **P9** | Med | **AW001 fires on every AI closure, including clean ones.** It taxed the one healthy closure with a ~30k-token sub-audit and is "largely redundant with the gate." Too broad. | hooks: scope AW001 to closures lacking a PR/review, not all |
+| **P10** | — | *(harness, now H6)* Banner showed "B → A → A" (reads as improving) for a declining trajectory — my seeder wrote `compliance_history` oldest-first; production prepends newest-first and the banner reverses. Banner is correct; seed was wrong. **Fixed.** | harness `seedSprintZeroState` |
+| **P11** | Low | **No governance objection to pulling an XL multi-sprint item (SH-01, incomplete deps) into the active sprint mid-sprint.** The planted over-commitment incident drew no flag. | engine: sprint-scope / oversize-pull warning |
+| **P1+** | — | Re-confirmed live: `create_sprint({name:'Sprint 1'})` rejected with the wave-NNN error; **plus** successful sprint assignments didn't register in analytics/compliance (assign succeeded, analytics showed 0). | engine (P1 + assignment→analytics coherence) |
+
+**Cross-run consistency:** both runs agree on the shape — deterministic BRE core is strong and buyable *now*; the reactive (AW advisories) + retrospective (PM audit) + memory (banner) layer — i.e. Phase 4's work — needs a quality pass before its findings can be trusted for decisions. The synthetic system has done its job: it converted "is the audit layer good?" into a concrete, prioritized defect list.
+
 ## 5. Cost & artifacts
 
 - Arc: 10 sessions, ~$11.5. Judges: fidelity $4.57 / value $3.92. Total ~$20.

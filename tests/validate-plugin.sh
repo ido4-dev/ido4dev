@@ -744,51 +744,36 @@ else
   warn "node not available — banner fixture render skipped"
 fi
 
-# ─── S. Derived-finding mechanism (A2-structural) ───
+# ─── S. Airtight derived-finding mechanism (A2 — MCP-tool persistence) ───
 #
-# Audit findings are DERIVED, not authored: the LLM gathers facts + narrates;
-# a deterministic classifier computes category/severity and persists. This
-# replaces the prose category-discipline that drifted into confident mislabels
-# 3 runs running (synthetic-001 P8 → 002 A2 → 003 A2-insufficient). The
-# structural guarantee: the agent never chooses a category, so it cannot
-# mislabel. Guard the mechanism (modules present) + the AGENT.md contract.
+# Audit findings are DERIVED, not authored, and the agent has NO write path:
+# persistence is the engine's persist_audit_findings MCP tool, which classifies
+# deterministically. The agent never chooses a category AND literally cannot
+# write findings any other way (no Write/Edit/Bash) — the airtight guarantee
+# after 5 iterations where soft constraints failed (synthetic-001..004).
 
 echo ""
-echo "▸ Derived-finding mechanism present (A2-structural)"
+echo "▸ Airtight derived-finding mechanism (MCP-tool persistence)"
 AGENT_MD="$PLUGIN_ROOT/agents/project-manager/AGENT.md"
 DERIVE_BAD=0
 
-# The deterministic classifier + persist path must exist.
-[ -f "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" ] \
-  || { fail "hooks/lib/finding-classifier.js missing (deterministic classifier)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-[ -f "$PLUGIN_ROOT/hooks/scripts/persist-findings.js" ] \
-  || { fail "hooks/scripts/persist-findings.js missing (deterministic persist path)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-# The classifier must encode the structural guarantee (a PR present can't be ghost).
-if [ -f "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" ]; then
-  grep -q "ghost_closure" "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" \
-    && grep -q "rubber_stamp" "$PLUGIN_ROOT/hooks/lib/finding-classifier.js" \
-    || { fail "finding-classifier.js missing core categories"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-fi
-# AGENT.md must teach derive-not-author + point at the persist script.
 if [ -f "$AGENT_MD" ]; then
   grep -q "DERIVED, not authored" "$AGENT_MD" \
-    || { fail "PM AGENT.md missing 'findings are DERIVED, not authored' contract (A2-structural)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-  grep -q "persist-findings.js" "$AGENT_MD" \
-    || { fail "PM AGENT.md doesn't point at persist-findings.js (the deterministic write path)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+    || { fail "PM AGENT.md missing 'findings are DERIVED, not authored' contract"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  grep -q "persist_audit_findings" "$AGENT_MD" \
+    || { fail "PM AGENT.md doesn't point at the persist_audit_findings MCP tool"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
   grep -q "never choose a category" "$AGENT_MD" \
     || { fail "PM AGENT.md missing the never-choose-a-category guarantee"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-  # Reachability (synthetic-004): the agent MUST be able to run the persist
-  # script — it had no Bash and fell back to hand-authoring + mislabeling.
-  grep -qE "^tools:.*\bBash\b" "$AGENT_MD" \
-    || { fail "PM AGENT.md frontmatter must grant Bash so persist-findings.js is reachable (synthetic-004)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
-  # ...and MUST NOT grant Write, or it can hand-author findings (the fallback path).
-  grep -qE "^tools:.*\bWrite\b" "$AGENT_MD" \
-    && { fail "PM AGENT.md frontmatter grants Write — removes the structural guarantee (agent can hand-author findings)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  # AIRTIGHT (synthetic-004): the agent must have NO write path. Frontmatter
+  # must NOT grant Write, Edit, or Bash — any of them lets it hand-author
+  # findings and override the classifier (which it did, repeatedly).
+  grep -qE "^tools:.*\b(Write|Edit|Bash)\b" "$AGENT_MD" \
+    && { fail "PM AGENT.md frontmatter grants a write tool (Write/Edit/Bash) — breaks the airtight guarantee; the agent can hand-author findings"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
 else
   fail "PM AGENT.md not found at $AGENT_MD"; DERIVE_BAD=$((DERIVE_BAD + 1))
 fi
 
-[ "$DERIVE_BAD" = "0" ] && pass "Findings are derived deterministically (classifier + persist path + AGENT.md contract)"
+[ "$DERIVE_BAD" = "0" ] && pass "Findings derived via MCP tool; agent has no write path (airtight)"
 
 # ─── T. Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02) ───
 #

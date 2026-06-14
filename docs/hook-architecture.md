@@ -299,7 +299,7 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
     "suitability_violations": 0,  //   AW005 fires last session
     "ended_at": "<ISO>"
   },
-  "open_findings": [            // Phase 4 Stage 4: written by project-manager AGENT only (single-writer discipline)
+  "open_findings": [            // written ONLY by the persist_audit_findings MCP tool (deterministic classify+write; the PM agent has no write path)
     {
       "id": "audit:<category>:<actor_id>:<scope>",
       "source": "pm-agent",
@@ -319,7 +319,7 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
 }
 ```
 
-**Single-writer discipline for `open_findings[]`:** the project-manager agent is the only writer. Hook rules emit advisory escalation (per Phase 3 Stage 7 advisory pattern); they do NOT persist findings via `post_evaluation.persist`. Validate-plugin.sh §Q grep-checks rule files for `open_findings` references inside `post_evaluation:` blocks and fails the build if found. The agent's body in `agents/project-manager/AGENT.md` "Audit Findings Persistence" section documents the schema, lifecycle (create / update / resolve), thresholds (per-category), and the bounded cap (20 findings, FIFO eviction by `first_seen`).
+**Single-writer discipline for `open_findings[]`:** the `persist_audit_findings` MCP tool (in `@ido4/mcp`, classifier in `@ido4/core`) is the only writer. The PM agent has no Write/Edit/Bash — it gathers facts + a note per observation and calls the tool, which **derives** category + severity deterministically and writes (read-then-mutate, preserving runner fields; dedup by id; FIFO cap 20). The agent cannot choose a category or hand-author a finding — the airtight fix after 5 iterations where prose/soft constraints failed (synthetic-001..004). Hook rules emit advisory escalation only; they do NOT persist findings (validate-plugin §Q enforces). The agent body's "Audit Findings Persistence" section documents the observation shapes + the tool call.
 
 **SessionEnd's role in `last_session_audit_summary`:** at SessionEnd, `hooks/scripts/session-end-state.js` scans `last_rule_fires` keys for AW rule prefixes (`AW001_*`, `AW002_*`, `AW005_*`), counts unique `<rule_id>:<scope>` pairs by category, stamps the totals into `last_session_audit_summary`, and clears those AW entries from `last_rule_fires` so the next session starts with a clean count. Non-AW entries (G1/G3/G5/CS/CH/AT) are preserved (they may still be debounce-relevant). If `total === 0`, the summary field is cleared instead of stamped — silence-when-empty avoids surfacing stale zeros at next SessionStart.
 

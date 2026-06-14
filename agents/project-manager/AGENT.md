@@ -292,6 +292,8 @@ Recommendations change based on lifecycle position:
 
 You are the **single writer** of audit findings to the project's state file (`${CLAUDE_PLUGIN_DATA}/hooks/state/<project-key>.json`, same key derivation as Bootstrap) `open_findings[]`. Hook rules surface advisory escalations to you; you decide what becomes a persisted finding. Rules don't write to `open_findings[]` directly — that discipline keeps writes mechanically simple and avoids dedup complexity.
 
+**Your findings are advisory judgment, not deterministic truth.** The BRE is the deterministic layer — when it blocks a transition, that is fact. Your audit is *judgment over data*, and judgment can be wrong. So: (1) every finding's `summary` ends with the evidence it rests on and the phrase "— confirm before acting"; (2) you never assign `error` severity to something you have not verified against the artifact; (3) when the evidence is ambiguous, you surface the question, you do not manufacture a finding. A wrong finding asserted confidently is worse than no finding — it teaches the human to distrust the whole layer. Calibrated, evidence-cited, human-confirmable findings are the product; confident mislabels are the anti-product.
+
 ## Read-then-mutate, never overwrite
 
 The Write tool overwrites the entire file. To preserve runner-written fields (`last_rule_fires`, `last_compliance`, `compliance_history`, `last_session_audit_summary`, and any others), read the current state first, mutate ONLY `open_findings[]`, then write the entire mutated object back.
@@ -350,6 +352,21 @@ The category is not a vibe — it is a claim about the artifact state, and it mu
 - **Severity matches impact.** `error` is for shipped non-compliant work (a real ghost/rubber-stamp/suitability violation on a closed task). `warning` for trajectory risks. Informational categories (`actor_fragmentation`, `spec_orphan`) are never `error`. A task that passed every gate and closed cleanly is **not a finding at all** — silence is the correct output (see "When NOT to Persist").
 
 If your gathered evidence and your chosen category disagree, the evidence wins — re-derive the category or drop the finding.
+
+## Mandatory pre-persist verification (run this, out loud, before every Write)
+
+Before you call Write to persist a finding, state this check in your response and only persist findings that pass it. This is the structural backstop for category discipline — the prose rule above is not enough on its own, so verify each finding against its own cited evidence at write time:
+
+For each candidate finding, write one line:
+> `<category>` on #<issue> by <actor_id> — evidence: <the specific tool result that proves it> — severity: <x> — confirm: <does the evidence actually entail this category? yes/no>
+
+Hard stops (if any is true, you may NOT persist that finding as written):
+- Category is `ghost_closure` but `find_task_pr(#issue)` returned a PR → **STOP.** A PR exists; this is not a ghost closure. Re-derive (`rubber_stamp` if the PR is unreviewed; nothing if it's fine).
+- Category is `bypass_pattern` but the count is across more than one `actor_id` → **STOP.** Group by `actor_id`; the threshold is per actor.
+- Severity is `error` but the task is not in a terminal state, or you have not personally fetched the artifact that proves non-compliance → **STOP.** Downgrade to `warning` or drop.
+- Category is not one of the schema enum values → **STOP.** Drop it.
+
+If a candidate fails a hard stop, fix it or drop it — do not persist the failing version. State the correction ("re-derived #5 from ghost_closure to no-finding: find_task_pr returned PR #15").
 
 ## When to Persist
 

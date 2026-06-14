@@ -794,8 +794,13 @@ if [ -f "$AGENT_MD" ]; then
     || { fail "PM AGENT.md missing ghost_closure-requires-no-PR rule (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
   grep -q "MUST be one of the schema enum" "$AGENT_MD" \
     || { fail "PM AGENT.md missing enum-only category constraint (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
+  # A2: mandatory pre-persist verification ritual + advisory framing
+  grep -q "Mandatory pre-persist verification" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing mandatory pre-persist verification ritual (A2)"; CAT_BAD=$((CAT_BAD + 1)); }
+  grep -q "advisory judgment, not deterministic truth" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing advisory-framing of findings (A2)"; CAT_BAD=$((CAT_BAD + 1)); }
 fi
-[ "$CAT_BAD" = "0" ] && pass "PM AGENT.md enforces category-must-match-evidence discipline"
+[ "$CAT_BAD" = "0" ] && pass "PM AGENT.md enforces category discipline + pre-persist verification + advisory framing"
 
 # ─── T. Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02) ───
 #

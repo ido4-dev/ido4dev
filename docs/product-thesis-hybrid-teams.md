@@ -106,6 +106,7 @@ The bug set from the synthetic run. Highest priority because a system that *misr
 - Frame the pitch as governed/auditable AI adoption (sell to the fear).
 - Map ido4's roles onto the org's existing roles (PM/PO/compliance/eng-leadership).
 - Honest integration story for the existing stack (GitHub today; Jira/DORA as the named expansion).
+- **Agent GitHub identity is a deployment recommendation, not an afterthought.** Surfaced by the realistic-E2E design (`ido4-suite/briefs/realistic-e2e-design.md`): when an AI agent opens a PR, it must authenticate as a *distinct non-human identity* (a GitHub App or machine user), never the human engineer's token. Only then do AI-vs-human attribution, the DoD review gate, and the hybrid metrics actually work — if the agent uses a human's token, its work is indistinguishable from the human's at the GitHub layer and the whole governance/metrics story collapses. Enterprise onboarding should ship this as step one ("install the ido4 agent App / provision an agent service account").
 
 **What the *first* pilot actually needs:** Altitude 1 in full, plus an honest call on multi-agent identity (Altitude 2). Not the full metrics platform, not Jira integration — those are what *scale* needs, and a first design-partner pilot can be scoped to a team willing to use the GitHub substrate. The aggressive-marketing push, by contrast, should wait for at least the metrics instrument panel and the positioning, because that is what a cold, skeptical enterprise buyer evaluates.
 

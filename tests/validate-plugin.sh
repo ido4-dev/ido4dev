@@ -777,6 +777,13 @@ if [ -f "$AGENT_MD" ]; then
     || { fail "PM AGENT.md doesn't point at persist-findings.js (the deterministic write path)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
   grep -q "never choose a category" "$AGENT_MD" \
     || { fail "PM AGENT.md missing the never-choose-a-category guarantee"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  # Reachability (synthetic-004): the agent MUST be able to run the persist
+  # script — it had no Bash and fell back to hand-authoring + mislabeling.
+  grep -qE "^tools:.*\bBash\b" "$AGENT_MD" \
+    || { fail "PM AGENT.md frontmatter must grant Bash so persist-findings.js is reachable (synthetic-004)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
+  # ...and MUST NOT grant Write, or it can hand-author findings (the fallback path).
+  grep -qE "^tools:.*\bWrite\b" "$AGENT_MD" \
+    && { fail "PM AGENT.md frontmatter grants Write — removes the structural guarantee (agent can hand-author findings)"; DERIVE_BAD=$((DERIVE_BAD + 1)); }
 else
   fail "PM AGENT.md not found at $AGENT_MD"; DERIVE_BAD=$((DERIVE_BAD + 1))
 fi

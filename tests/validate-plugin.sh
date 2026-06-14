@@ -779,6 +779,24 @@ fi
 
 [ "$RTM_BAD" = "0" ] && pass "PM AGENT.md teaches read-then-mutate (header + rationale + code example)"
 
+# ─── S2. Category discipline in PM AGENT.md (synthetic-001 P8) ───
+#
+# P8 reproduction (synthetic-001): the audit mislabeled a healthy PR-backed
+# closure as error-severity ghost_closure and invented an out-of-enum
+# 'validation_bypass' category. Guard the prose that ties category to evidence.
+echo ""
+echo "▸ Category discipline present in PM AGENT.md (synthetic-001 P8)"
+CAT_BAD=0
+if [ -f "$AGENT_MD" ]; then
+  grep -q "Category discipline" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing 'Category discipline' section header (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
+  grep -q "ghost_closure\` requires that \`find_task_pr\` returned NO PR" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing ghost_closure-requires-no-PR rule (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
+  grep -q "MUST be one of the schema enum" "$AGENT_MD" \
+    || { fail "PM AGENT.md missing enum-only category constraint (P8 prose)"; CAT_BAD=$((CAT_BAD + 1)); }
+fi
+[ "$CAT_BAD" = "0" ] && pass "PM AGENT.md enforces category-must-match-evidence discipline"
+
 # ─── T. Imperative auto-prompt directive in sandbox SKILL.md (Phase 5 OBS-02) ───
 #
 # OBS-02 reproduction (sandbox-ux-findings-2026-04-25.md): the skill loaded

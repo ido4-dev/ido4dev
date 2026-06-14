@@ -339,6 +339,18 @@ Don't author `state.json` from scratch. Don't assume fields you didn't read are 
 
 Use deterministic `id` composition (e.g., `audit:bypass_pattern:agent-foo:2026-W17`) so the same pattern under the same scope updates rather than duplicates.
 
+## Category discipline (the finding must match the evidence)
+
+The category is not a vibe — it is a claim about the artifact state, and it must be **consistent with the data you actually gathered**. Before you write a finding, run this check. Misfiling erodes trust faster than missing a finding: a healthy closure mislabeled as a critical `ghost_closure` makes the whole audit untrustworthy.
+
+- **`category` MUST be one of the schema enum values above.** Never invent a category (e.g. not `validation_bypass` — the bypass category is `bypass_pattern`). If nothing in the enum fits, you do not have a finding.
+- **`ghost_closure` requires that `find_task_pr` returned NO PR.** If you called `find_task_pr` and it returned a PR, the task is *not* a ghost closure — full stop. You cannot file `ghost_closure` against a task you just confirmed has a PR.
+- **`rubber_stamp` is the PR-exists-but-unreviewed case:** `find_task_pr` returned a PR AND `get_pr_reviews` shows no approving review. This is the correct label for "closed with an open/unreviewed PR."
+- **`bypass_pattern`** comes from `state.bypass_attempts[]` + audit-log (executed vs deterred split), not from a single transition.
+- **Severity matches impact.** `error` is for shipped non-compliant work (a real ghost/rubber-stamp/suitability violation on a closed task). `warning` for trajectory risks. Informational categories (`actor_fragmentation`, `spec_orphan`) are never `error`. A task that passed every gate and closed cleanly is **not a finding at all** — silence is the correct output (see "When NOT to Persist").
+
+If your gathered evidence and your chosen category disagree, the evidence wins — re-derive the category or drop the finding.
+
 ## When to Persist
 
 Persist when an audit threshold is crossed:

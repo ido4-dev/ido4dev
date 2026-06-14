@@ -64,3 +64,32 @@ rules:
 
         Approving more tasks without addressing the underlying compliance weaknesses can compound the trajectory. Consider whether this approval belongs to a recovery plan, or whether it should wait on a /mcp__plugin_ido4dev_ido4__compliance review.
       cta: "Confirm approval. A project-manager agent review is recommended if you proceed routinely in this state."
+
+# P7 — record attempted BRE bypasses so the audit can see them.
+#
+# G1 gates skipValidation at PreToolUse, BEFORE the engine runs. When the
+# attempt is deterred (headless ask→deny, or the user declines), the engine
+# never executes, so NOTHING reaches the audit log — and a post-hoc PM audit
+# reports "no skipValidation was used" when an agent tried and was blocked.
+# That is exactly the institutional-memory signal §3.9 says to keep: "this
+# actor reached for the bypass." We record every skipValidation attempt here,
+# at the gate, independent of whether it ultimately executes (an executed
+# bypass also fires AW002 post-hoc, so the two records are complementary).
+#
+# Bounded (cap 50), newest-first, cross-session (coerce() preserves it) so the
+# audit and banner can answer "how many bypass attempts, by whom, when."
+post_evaluation:
+  persist:
+    bypass_attempts: |
+      tool_input.skipValidation === true
+        ? [
+            {
+              issue: (tool_input.issueNumber !== undefined ? tool_input.issueNumber : null),
+              tool: event.tool_name,
+              actor_type: 'ai-agent',
+              at: now_iso,
+              gated_by: 'G1_skip_validation_bypass'
+            },
+            ...((Array.isArray(state.bypass_attempts) ? state.bypass_attempts : []).slice(0, 49))
+          ]
+        : (Array.isArray(state.bypass_attempts) ? state.bypass_attempts : [])

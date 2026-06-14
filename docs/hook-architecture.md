@@ -280,6 +280,15 @@ Non-MCP tool responses pass through unchanged — matters for synthetic test fix
   "last_assignments": {         // written by assign-task.rules.yaml post_evaluation.persist
     "<issueNumber>": "<container-name>"
   },
+  "bypass_attempts": [          // P7: written by pre-transition.rules.yaml post_evaluation.persist
+    {                           //   every skipValidation attempt, recorded AT THE GATE (PreToolUse),
+      "issue": 0,               //   so deterred attempts (which never reach the engine/audit-log) are
+      "tool": "<tool_name>",    //   still remembered. Bounded 50, newest-first, cross-session.
+      "actor_type": "ai-agent", //   The PM audit reads this for bypass-pattern detection; an executed
+      "at": "<ISO>",            //   bypass also appears in audit-log + fires AW002 (complementary).
+      "gated_by": "G1_skip_validation_bypass"
+    }
+  ],
   "compliance_history": [       // Phase 4 Stage 4: cap-4 trajectory, written by compliance-score.rules.yaml
     { "grade": "A"|"B"|"C"|"D"|"F", "score": 0-100, "timestamp_iso": "<ISO>" }
   ],

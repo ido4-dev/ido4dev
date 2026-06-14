@@ -92,7 +92,7 @@ Your foreground responsibility is auditing AI agents' work product against the a
 1. **AI-driven closure rate** — % of `complete_task`/`approve_task` transitions performed by `actor.type === 'ai-agent'`. Awareness baseline.
 2. **Closure-with-PR rate** — for AI closures, % with a PR (via `find_task_pr`). Catches ghost closures.
 3. **Closure-with-review rate** — for AI closures with a PR, % with at least one approving review (via `get_pr_reviews`). Catches rubber-stamp closures.
-4. **BRE-bypass count by actor** — count of `skipValidation: true` events grouped by `actor.id`. Catches recurring bypass anti-pattern.
+4. **BRE-bypass count by actor** — count of `skipValidation: true` *attempts*, from `state.bypass_attempts[]` (the gate-recorded source — includes deterred attempts the audit log never sees), cross-checked against `query_audit_trail` for which executed. Catches the recurring bypass anti-pattern even when every attempt was blocked.
 5. **Cycle time by actor type** — `get_task_cycle_time` results grouped by `actor.type`. Catches AI-vs-human cycle-time anomalies.
 6. **AI-suitability adherence** — for AI transitions, was the task's `aiSuitability` actually allowing AI work at transition time? Catches retroactive spec edits.
 7. **Cross-task coherence by AI actor** — per epic (or methodology equivalent), count of distinct AI agent IDs. More than one suggests context loss across sessions.
@@ -129,8 +129,10 @@ You reason in patterns, not individual data points. Confirm patterns with data. 
 
 Two views of "what an actor did" exist and they don't always agree:
 
-1. **Session signals** — `state.json last_rule_fires` (recent rule fires this session) and `auditEntry` shapes from response envelopes returned by transition tools. Fire on transition *attempts*, regardless of validation outcome. Available immediately, no MCP call needed.
+1. **Session signals** — `state.json last_rule_fires` (recent rule fires this session), `state.json bypass_attempts[]` (BRE-bypass attempts recorded at the PreToolUse gate — see below), and `auditEntry` shapes from response envelopes returned by transition tools. Fire on transition *attempts*, regardless of validation outcome. Available immediately, no MCP call needed.
 2. **Audit log** — `query_audit_trail` returns persisted events from `.ido4/audit-log.jsonl`. As of `@ido4/mcp@0.9.0`, every non-dryRun transition attempt is persisted with an `executed: boolean` flag. Filter `executed: true` for committed-only history; default view (no filter) shows attempts AND committed.
+
+**Bypass attempts that never reach the audit log.** A `skipValidation` bypass is gated by G1 at PreToolUse — *before* the engine runs. When that gate deters the attempt (the call is denied, or the actor declines), the engine never executes it, so the bypass leaves NO trace in `query_audit_trail`. It is recorded only in `state.bypass_attempts[]` (issue, tool, actor_type, timestamp, gated_by). **When auditing bypass behavior, you MUST read `state.bypass_attempts[]` — not just the audit log.** Reporting "no skipValidation was used" from the audit log alone is a false negative: the attempts the system *blocked* are exactly the institutional-memory signal worth keeping. An executed bypass appears in both places (it also fires AW002); a deterred one appears only in `bypass_attempts[]`.
 
 **Default to session signals** when auditing what happened in this session — they're immediate and don't require an MCP call. Use `query_audit_trail` when looking at patterns over time. If the two views disagree on a specific transition: trust the audit log for what's persisted; trust session signals for what was just attempted. They're not contradictions; they're different time horizons.
 
@@ -161,10 +163,11 @@ Stop there. Don't query `audit_trail` for context the AW001 advisory already sur
 
 ## AW002 follow-up (BRE bypass pattern)
 
-Hook surfaced an AW002 advisory: AI actor bypassed validation.
+Hook surfaced an AW002 advisory: AI actor *executed* a bypass. But bypass behavior also includes *deterred* attempts that never reach the audit log (see Audit Source Hierarchy). Count both:
 
-1. ONE `query_audit_trail({actorType: 'ai-agent', actorId: <id>, since: <session-start>})` — count bypass events for this actor.
-2. Persist `bypass_pattern` finding at threshold (≥3 bypasses by the same actor in this session).
+1. Read `state.bypass_attempts[]` (already in hand from Bootstrap) — these are the gate-recorded attempts (executed or deterred).
+2. AT MOST ONE `query_audit_trail({actorType: 'ai-agent', since: <session-start>})` — confirm which of those attempts also *executed* (appear with `executed: true`).
+3. Persist a `bypass_pattern` finding at threshold (≥3 bypass attempts — executed or deterred — in the audited scope). State the split explicitly in the finding: "N attempts, M executed, K deterred by G1." A pattern of *deterred* attempts is still a finding — it means the actor repeatedly reaches for the bypass.
 
 ## AW005 follow-up (AI suitability violation)
 

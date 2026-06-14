@@ -720,6 +720,47 @@ check('persist coexists with rules — both sets of mutations accumulate', () =>
   assertEq(res.stateMutations.last_compliance, { grade: 'B' }, 'persist also written');
 });
 
+console.log('\n▸ P7 — pre-transition records BRE-bypass attempts (real rule file)');
+
+const preTransitionRuleFile = runner.loadRuleFile(join(repoRoot, 'hooks/rules/pre-transition.rules.yaml'));
+
+function evalPreTransition(toolName, toolInput, priorState) {
+  return runner.evaluate({
+    ruleFile: preTransitionRuleFile,
+    event: { tool_name: toolName, tool_input: toolInput },
+    profile: { id: 'scrum' },
+    profileValues: {},
+    state: priorState ?? emptyState(),
+    now: Date.now(),
+  });
+}
+
+check('skipValidation attempt is recorded to bypass_attempts with issue/tool/actor', () => {
+  const res = evalPreTransition('mcp__plugin_ido4dev_ido4__approve_task', { issueNumber: 42, skipValidation: true });
+  const attempts = res.stateMutations.bypass_attempts;
+  assertTrue(Array.isArray(attempts) && attempts.length === 1, 'one attempt recorded');
+  assertEq(attempts[0].issue, 42, 'issue captured');
+  assertEq(attempts[0].actor_type, 'ai-agent', 'actor captured');
+  assertEq(attempts[0].gated_by, 'G1_skip_validation_bypass', 'gate captured');
+  assertTrue(typeof attempts[0].at === 'string', 'timestamp captured');
+});
+
+check('a second bypass attempt prepends (newest-first), bounded', () => {
+  const prior = { ...emptyState(), bypass_attempts: [{ issue: 42, tool: 't', actor_type: 'ai-agent', at: '2026-01-01T00:00:00Z', gated_by: 'G1_skip_validation_bypass' }] };
+  const res = evalPreTransition('mcp__plugin_ido4dev_ido4__start_task', { issueNumber: 7, skipValidation: true }, prior);
+  const attempts = res.stateMutations.bypass_attempts;
+  assertEq(attempts.length, 2, 'accumulated');
+  assertEq(attempts[0].issue, 7, 'newest first');
+  assertEq(attempts[1].issue, 42, 'prior preserved');
+});
+
+check('a clean (non-bypass) transition does not add a bypass attempt', () => {
+  const prior = { ...emptyState(), bypass_attempts: [{ issue: 42 }] };
+  const res = evalPreTransition('mcp__plugin_ido4dev_ido4__approve_task', { issueNumber: 99 }, prior);
+  // bypass_attempts is preserved unchanged (length 1), not grown
+  assertEq(res.stateMutations.bypass_attempts.length, 1, 'no new attempt on clean transition');
+});
+
 check('validateRuleFile rejects non-object post_evaluation', () => {
   try {
     runner.validateRuleFile({ rules: [], post_evaluation: 'not an object' }, 'mem');

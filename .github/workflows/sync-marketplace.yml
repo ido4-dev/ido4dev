@@ -41,40 +41,78 @@ jobs:
           token: ${{ secrets.MARKETPLACE_TOKEN }}
           path: marketplace
 
-      - name: Update marketplace version
+      # Vendor the plugin's runtime files into the marketplace (mirrors the
+      # ido4specs/ido4shape pattern). The marketplace ships a COPY of each
+      # plugin; without this step the catalogued plugins/ido4dev/ would go stale
+      # on every release (this step previously only bumped the version string).
+      - name: Sync plugin directory
+        run: |
+          rm -rf marketplace/plugins/ido4dev
+          mkdir -p marketplace/plugins/ido4dev
+          rsync -av \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='docs' \
+            --exclude='drafts' \
+            --exclude='reports' \
+            --exclude='*.plan.md' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            source/ marketplace/plugins/ido4dev/
+          echo "Synced plugin directory"
+
+      - name: Update marketplace manifest
         run: |
           python3 -c "
           import json
-          path = 'marketplace/.claude-plugin/marketplace.json'
-          d = json.load(open(path))
+          plugin_path = 'source/.claude-plugin/plugin.json'
+          market_path = 'marketplace/.claude-plugin/marketplace.json'
+          plugin = json.load(open(plugin_path))
+          d = json.load(open(market_path))
           for p in d['plugins']:
               if p['name'] == 'ido4dev':
-                  p['version'] = '${{ steps.version.outputs.version }}'
-          json.dump(d, open(path, 'w'), indent=2)
+                  p['version'] = plugin['version']
+                  p['description'] = plugin.get('description', p.get('description', ''))
+                  # Fields shared by plugin.json and the marketplace entry schema.
+                  # NOT synced: 'category'/'tags' are marketplace-specific (not in
+                  # plugin.json), so they stay authored in marketplace.json.
+                  for field in ('homepage', 'repository', 'license', 'keywords', 'author'):
+                      if field in plugin:
+                          p[field] = plugin[field]
+          json.dump(d, open(market_path, 'w'), indent=2)
           "
           echo "Updated marketplace.json to v${{ steps.version.outputs.version }}"
 
-      - name: Check for changes
-        id: changes
-        run: |
-          cd marketplace
-          if git diff --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No version change detected"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Version change detected"
-          fi
-
       - name: Commit and push marketplace
-        if: steps.changes.outputs.changed == 'true'
         run: |
           cd marketplace
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/marketplace.json
-          git commit -m "ido4dev v${{ steps.version.outputs.version }}"
-          git push
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to sync"
+            exit 0
+          fi
+          git commit -m "sync ido4dev v${{ steps.version.outputs.version }}"
+          # Retry with rebase to handle concurrent pushes from sibling sync
+          # workflows. Multiple plugin repos sync to the same ido4-plugins/main;
+          # without retry, whichever job pushes second loses the race.
+          attempt=1
+          until git push; do
+            if [ "$attempt" -ge 5 ]; then
+              echo "::error::Push failed after 5 attempts"
+              exit 1
+            fi
+            echo "Push rejected (attempt $attempt/5) — fetching and rebasing"
+            sleep $((attempt * 2))
+            if ! git pull --rebase; then
+              echo "::error::Rebase conflict — concurrent edits touched overlapping content"
+              git rebase --abort 2>/dev/null || true
+              exit 1
+            fi
+            attempt=$((attempt + 1))
+          done
 
       - name: Create GitHub Release
         working-directory: source

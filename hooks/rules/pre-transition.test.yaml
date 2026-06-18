@@ -43,6 +43,29 @@ cases:
     expect:
       fired: [G1_skip_validation_bypass]
 
+  # Regression guard for synthetic-005 OBS-01/OBS-02: plan_task was missing from
+  # the gate matcher, so plan_task + skipValidation executed ungated and was never
+  # recorded, causing the post-hoc audit to undercount bypasses. The gate matcher
+  # now covers the same set as the PostToolUse audit (incl. plan|shape|bet|ship|kill).
+  - name: "scrum: plan_task with skipValidation=true fires G1 (gate/audit symmetry)"
+    profile: scrum
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__plan_task"
+      tool_input: { issueNumber: 7, skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+      title_contains: "plan_task"
+      body_contains: "skipValidation: true"
+
+  - name: "shapeup: bet_task with skipValidation=true fires G1"
+    profile: shapeup
+    input:
+      tool_name: "mcp__plugin_ido4dev_ido4__bet_task"
+      tool_input: { issueNumber: 12, skipValidation: true }
+    expect:
+      fired: [G1_skip_validation_bypass]
+      title_contains: "bet_task"
+
   # ────────────────────────────────────────────────────────────────
   # G1 negative — skipValidation absent or false
   # ────────────────────────────────────────────────────────────────

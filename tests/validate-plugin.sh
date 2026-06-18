@@ -625,6 +625,31 @@ sys.exit(1)
       fail "PreToolUse hook missing for $PRE.rules.yaml"
     fi
   done
+
+  # Gate↔audit symmetry (synthetic-005 OBS-01/OBS-02 regression guard):
+  # The PreToolUse pre-transition GATE matcher and the PostToolUse ai-work-audit
+  # matcher MUST cover the same set of *_task transition tokens. If they drift,
+  # a skipValidation on a gate-only-omitted tool (e.g. plan_task) executes
+  # ungated AND is never recorded to bypass_attempts — the post-hoc audit then
+  # silently undercounts bypasses. Keep the two alternation lists identical.
+  if python3 -c "
+import json, re, sys
+d = json.load(open('hooks/hooks.json'))
+def tokens_by_rulefile(event, rulefile):
+    for g in d.get('hooks', {}).get(event, []):
+        for h in g.get('hooks', []):
+            if rulefile in h.get('command', ''):
+                mm = re.search(r'_ido4__\((.*?)\)_task\\\$', g.get('matcher', ''))
+                return set(mm.group(1).split('|')) if mm else None
+    return None
+gate = tokens_by_rulefile('PreToolUse', 'pre-transition.rules.yaml')
+audit = tokens_by_rulefile('PostToolUse', 'ai-work-audit.rules.yaml')
+sys.exit(0 if gate and audit and gate == audit else 1)
+" 2>/dev/null; then
+    pass "gate↔audit matcher symmetry: pre-transition gate covers the same _task tokens as ai-work-audit"
+  else
+    fail "regression: PreToolUse pre-transition gate and PostToolUse ai-work-audit matchers cover DIFFERENT _task tokens (synthetic-005 OBS-01/OBS-02)"
+  fi
 fi
 
 # Rule-file event field coherence: each *.rules.yaml should declare event: and

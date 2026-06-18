@@ -36,7 +36,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return)_task$",
+        "matcher": "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return|shape|bet|ship|kill|plan)_task$",
         "hooks": [
           {
             "type": "command",

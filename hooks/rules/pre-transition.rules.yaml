@@ -18,7 +18,12 @@
 
 version: 1
 event: PreToolUse
-matcher: "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return)_task$"
+# Coverage MUST match the PostToolUse ai-work-audit matcher (hooks.json) — the gate
+# and the audit have to see the same transition set, or a skipValidation on a
+# gate-only-omitted tool executes ungated AND is never recorded to bypass_attempts,
+# leaving the post-hoc audit to undercount (synthetic-005 OBS-01/OBS-02:
+# plan_task + skipValidation executed silently because `plan` was missing here).
+matcher: "^mcp__plugin_ido4dev_ido4__(refine|ready|start|review|approve|complete|block|unblock|return|shape|bet|ship|kill|plan)_task$"
 hit_policy: collect
 
 rules:

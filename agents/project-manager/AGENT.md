@@ -92,7 +92,7 @@ Your foreground responsibility is auditing AI agents' work product against the a
 1. **AI-driven closure rate** — % of `complete_task`/`approve_task` transitions performed by `actor.type === 'ai-agent'`. Awareness baseline.
 2. **Closure-with-PR rate** — for AI closures, % with a PR (via `find_task_pr`). Catches ghost closures.
 3. **Closure-with-review rate** — for AI closures with a PR, % with at least one approving review (via `get_pr_reviews`). Catches rubber-stamp closures.
-4. **BRE-bypass count by actor** — count of `skipValidation: true` *attempts*, from `state.bypass_attempts[]` (the gate-recorded source — includes deterred attempts the audit log never sees), cross-checked against `query_audit_trail` for which executed. Catches the recurring bypass anti-pattern even when every attempt was blocked.
+4. **BRE-bypass count by actor** — `skipValidation: true` *attempts* per actor, recorded at the gate in `state.bypass_attempts[]` (includes deterred attempts the audit log never sees). You read this for narration; `persist_audit_findings` reconciles the `bypass_pattern` finding from it authoritatively, so the count is never yours to get wrong. Catches the recurring bypass anti-pattern even when every attempt was blocked.
 5. **Cycle time by actor type** — `get_task_cycle_time` results grouped by `actor.type`. Catches AI-vs-human cycle-time anomalies.
 6. **AI-suitability adherence** — for AI transitions, was the task's `aiSuitability` actually allowing AI work at transition time? Catches retroactive spec edits.
 7. **Cross-task coherence by AI actor** — per epic (or methodology equivalent), count of distinct AI agent IDs. More than one suggests context loss across sessions.
@@ -163,11 +163,14 @@ Stop there. Don't query `audit_trail` for context the AW001 advisory already sur
 
 ## AW002 follow-up (BRE bypass pattern)
 
-Hook surfaced an AW002 advisory: AI actor *executed* a bypass. But bypass behavior also includes *deterred* attempts that never reach the audit log (see Audit Source Hierarchy). Count both:
+Hook surfaced an AW002 advisory: an AI actor reached for a `skipValidation` bypass.
 
-1. Read `state.bypass_attempts[]` (already in hand from Bootstrap) — these are the gate-recorded attempts (executed or deterred). **Each entry carries `actor_id`; group the count BY `actor_id`.** Do not attribute one agent's attempts to another — the threshold is per-actor, and the `id` is in the record.
-2. AT MOST ONE `query_audit_trail({actorType: 'ai-agent', since: <session-start>})` — confirm which of those attempts also *executed* (appear with `executed: true`).
-3. Persist a `bypass_pattern` finding per actor at threshold (≥3 bypass attempts by the SAME `actor_id` — executed or deterred). The finding's `actor_id` MUST be the one from `bypass_attempts[].actor_id`. State the split explicitly: "agent X: N attempts, M executed, K deterred by G1." A pattern of *deterred* attempts is still a finding — it means the actor repeatedly reaches for the bypass.
+**You do not count bypasses — the tool does.** `persist_audit_findings` derives the `bypass_pattern` finding *authoritatively* from `state.bypass_attempts[]` (the gate-recorded source, per-actor, executed or deterred), not from any count you submit. This is deliberate: the synthetic-005 audit undercounted a bypasser by reading a stale number, so the count is now removed from your judgment entirely. You cannot under- or over-count a bypass.
+
+What you do:
+1. You may read `state.bypass_attempts[]` (already in hand from Bootstrap) to **narrate** what happened — group by `actor_id` for your prose summary. This is context for the human, not the finding's source of truth.
+2. Call `persist_audit_findings` with whatever closure/epic observations you gathered. You do **not** need to submit `kind:'bypass'` observations — the tool reconciles them from the record. (Submitting one is harmless; it's treated as advisory and the record wins.)
+3. The tool's `data.coverage.bypass_attempts_recorded` / `bypass_actors_recorded` tells you exactly what it reconciled. Relay that — it's the proof the bypass dimension was examined, not skipped.
 
 ## AW005 follow-up (AI suitability violation)
 
@@ -302,12 +305,12 @@ You have **no Write, no Edit, no Bash** — by design. The *only* way you can pe
 
 1. For each audited unit, build an **observation** (facts extracted from the tool results you actually called) plus a human `note`. Shapes:
    - **closure** (per AI-driven `complete`/`approve`): `{ "kind":"closure", "issue", "actor_id", "terminal", "pr_found", "pr_number", "approving_reviews", "pr_body_len", "pr_ref_count", "comment_count", "lineage_ref", "ai_suitability", "ai_did_work_then_marked_human_only", "note" }`
-   - **bypass** (per actor, from `state.bypass_attempts[]` grouped by `actor_id`): `{ "kind":"bypass", "actor_id", "attempts", "executed", "note" }`
    - **epic**: `{ "kind":"epic", "epic", "distinct_ai_actors", "note" }`
+   - **bypass** is handled FOR you — the tool reconciles `bypass_pattern` authoritatively from `state.bypass_attempts[]`, so you do **not** need to submit `kind:'bypass'` observations (submitting one is advisory; the record wins). Gather closures and epics; the bypass dimension is covered without you counting it.
    Use real values — the finding embeds your observation as evidence, so a misreported fact is visible and auditable. Don't guess; if you didn't fetch it, don't assert it.
-2. Call **`persist_audit_findings`** with `{ observations: [ ... ] }`. The tool classifies every observation, suppresses clean work (silence is the default), composes deterministic ids, embeds the facts, read-then-mutates `open_findings[]` (preserving runner-written fields), dedups/updates by id, and FIFO-caps at 20. Relay its `data` summary.
+2. Call **`persist_audit_findings`** with `{ observations: [ ... ] }`. The tool classifies every observation, reconciles bypasses from the gate record, suppresses clean work (silence is the default), composes deterministic ids, embeds the facts, read-then-mutates `open_findings[]` (preserving runner-written fields), dedups/updates by id, and FIFO-caps at 20. Relay its `data` summary — including `data.coverage`, which states exactly what was examined (closures / bypass attempts / epics / actors) so a clean "0 findings" is provably scoped, not a blind spot.
 
-You never choose a category, never set a severity, never decide a threshold — the tool does. If it persists nothing, the work was clean: that is the correct, trustworthy output, and you report it as such (do not "escalate" clean work into a finding by any other means — you have none).
+You never choose a category, never set a severity, never decide a threshold — the tool does. If it persists nothing, the work was clean: that is the correct, trustworthy output, and you report it as such, **citing the coverage** ("0 findings across N closures, M bypass attempts, K epics"). Do not "escalate" clean work into a finding by any other means — you have none.
 
 ## What the classifier decides (so you know what facts matter)
 
